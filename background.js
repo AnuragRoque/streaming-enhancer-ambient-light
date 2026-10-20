@@ -5,12 +5,29 @@
 'use strict';
 
 var COMMAND_ACTIONS = {
-  'toggle-video-hud': 'toggleHud',
+  'toggle-video-hud': 'toggleToolbar',
   'quick-ratio': 'cycle',
   'zoom-in': 'zoomIn',
   'zoom-out': 'zoomOut',
-  'reset-video': 'reset'
+  'reset-video': 'reset',
+  'speed-up': 'speedUp',
+  'speed-down': 'speedDown',
+  'speed-reset': 'speedReset',
+  'seek-back': 'seekBack',
+  'seek-forward': 'seekFwd',
+  'toggle-fill': 'toggleFill',
+  'cycle-backdrop': 'cycleBackdrop',
+  'toggle-pip': 'pip',
+  'toggle-fullscreen': 'fullscreen',
+  'window-fullscreen': 'winfs',
+  'toggle-lights': 'lights',
+  'snapshot': 'snapshot'
 };
+
+// Picture-in-Picture and fullscreen need a user gesture inside the page. A
+// script injected while handling a command (or a popup click) carries it; a
+// runtime message does not.
+var GESTURE_ACTIONS = { pip: true, fullscreen: true };
 
 // Per-tab video scores reported by each frame: { 'frames:<tabId>': { <frameId>: score } }.
 // Kept in storage.session so it survives the worker being shut down; all edits go
@@ -75,26 +92,41 @@ function sendToVideoFrame(tabId, msg) {
 }
 
 function shortcutKeys() {
+  if (!chrome.commands || !chrome.commands.getAll) return Promise.resolve({});
   return chrome.commands.getAll().then(function (cmds) {
-    var keys = { hud: '', ratio: '' };
-    cmds.forEach(function (c) {
-      if (c.name === 'toggle-video-hud') keys.hud = c.shortcut || '';
-      if (c.name === 'quick-ratio') keys.ratio = c.shortcut || '';
-    });
+    var keys = {};
+    cmds.forEach(function (c) { if (c.shortcut) keys[c.name] = c.shortcut; });
     return keys;
   });
 }
 
-chrome.commands.onCommand.addListener(function (command, tab) {
+function runWithGesture(tabId, frameId, action) {
+  return chrome.scripting.executeScript({
+    target: { tabId: tabId, frameIds: [frameId] },
+    world: 'MAIN',
+    func: function (a) { window.postMessage({ __qlock: 'player', action: a }, '*'); },
+    args: [action]
+  }).catch(function () { /* page not scriptable (chrome://, store) */ });
+}
+
+if (chrome.commands && chrome.commands.onCommand) chrome.commands.onCommand.addListener(function (command, tab) {
   var action = COMMAND_ACTIONS[command];
   if (!action) return;
   var tabReady = tab && tab.id >= 0
     ? Promise.resolve(tab)
     : chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(function (t) { return t[0]; });
+  if (GESTURE_ACTIONS[action]) {
+    // Inject right away, while the key press still counts as a gesture.
+    tabReady.then(function (t) {
+      if (!t || t.id < 0) return;
+      return videoFrame(t.id).then(function (frameId) { return runWithGesture(t.id, frameId, action); });
+    });
+    return;
+  }
   Promise.all([tabReady, shortcutKeys()]).then(function (r) {
     var t = r[0];
     if (!t || t.id < 0) return;
-    return sendToVideoFrame(t.id, { type: 'qlock:videoTransform', action: action, keys: r[1] });
+    return sendToVideoFrame(t.id, { type: 'qlock:player', action: action, params: { keys: r[1] } });
   });
 });
 

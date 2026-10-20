@@ -6,177 +6,350 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header class="bar">
-    <h1>QualityLock</h1>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon48.png" alt="" width="26" height="26">
+      <div class="brand-text">
+        <h1>QualityLock</h1>
+        <span class="sub" id="brandSub">Quality lock &amp; video controls</span>
+      </div>
+    </div>
     <label class="switch" title="Turn QualityLock on or off everywhere">
-      <input type="checkbox" id="enabled">
+      <input type="checkbox" id="enabled" aria-label="QualityLock on or off">
       <span class="track"><span class="knob"></span></span>
     </label>
   </header>
 
-  <section class="now" id="now" aria-live="polite">
-    <p class="now-empty" id="nowEmpty">Open any video or streaming site to see what's playing.</p>
-    <div class="now-live" id="nowLive" hidden>
-      <div class="now-head">
-        <span class="tally" id="nowTally"></span>
-        <span id="nowSite"></span>
-      </div>
-      <div class="res" id="nowRes">—</div>
-      
-      <div class="telemetry-grid" id="nowTelemetry" hidden>
-        <div class="telemetry-pill">
-          <span class="telemetry-label">DOWNLOAD</span>
-          <span class="telemetry-val" id="telemetryDown">0 MB</span>
-        </div>
-        <div class="telemetry-pill">
-          <span class="telemetry-label">SPEED</span>
-          <span class="telemetry-val" id="telemetrySpeed">0.00 Mbps</span>
-        </div>
-        <div class="telemetry-pill">
-          <span class="telemetry-label">BUFFER</span>
-          <span class="telemetry-val" id="telemetryBuffer">0 s</span>
-        </div>
-        <div class="telemetry-pill">
-          <span class="telemetry-label">FPS / DROPS</span>
-          <span class="telemetry-val" id="telemetryFps">0 fps</span>
-        </div>
-      </div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" class="tab" data-tab="now" id="tab-now"><i data-icon="now"></i><span>Now</span></button>
+    <button type="button" role="tab" class="tab" data-tab="display" id="tab-display"><i data-icon="display"></i><span>Display</span></button>
+    <button type="button" role="tab" class="tab" data-tab="picture" id="tab-picture"><i data-icon="picture"></i><span>Picture</span></button>
+    <button type="button" role="tab" class="tab" data-tab="playback" id="tab-playback"><i data-icon="speed"></i><span>Playback</span></button>
+    <button type="button" role="tab" class="tab" data-tab="quality" id="tab-quality"><i data-icon="lock"></i><span>Quality</span></button>
+    <button type="button" role="tab" class="tab" data-tab="settings" id="tab-settings"><i data-icon="settings"></i><span>Settings</span></button>
+  </nav>
 
-      <p class="detail" id="nowDetail"></p>
-      <p class="detail" id="nowKept"></p>
-      <p class="warn" id="nowWarn" hidden></p>
-      <div class="actions">
-        <button type="button" id="toggleHudBtn" class="hud-btn" title="Toggle Video Controller HUD">Video Controller</button>
-        <button type="button" id="toggleNerdsBtn" class="nerds-btn" title="Toggle Stats for Nerds HUD (Alt+Shift+N)">Stats for Nerds</button>
-        <button type="button" id="reload">Reload tab</button>
-        <button type="button" id="resetLevel" hidden>Reset fallback</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- Video Controller & Zoom Section -->
-  <section class="video-ctrl" id="videoCtrlSection">
-    <div class="section-head">
-      <h2>Video Controller & Zoom</h2>
-      <span class="ctrl-mode-tag" id="ctrlModeTag">100% Original</span>
-    </div>
-
-    <!-- Quick Presets -->
-    <div class="preset-btn-grid">
-      <button type="button" id="btnFixRatio" class="preset-btn primary" title="Auto zoom to eliminate black bars in fullscreen or window without distortion">✨ Fix Ratio</button>
-      <button type="button" id="btnStretchFill" class="preset-btn" title="Stretch edges to fill display without cropping">↔ Stretch Fill</button>
-      <button type="button" id="btnPreset169" class="preset-btn" title="Stretch horizontally to 16:9 widescreen">16:9</button>
-      <button type="button" id="btnPreset219" class="preset-btn" title="Stretch to 21:9 Cinemascope ultrawide">21:9</button>
-      <button type="button" id="btnResetTransform" class="preset-btn" title="Reset all zoom and stretch to 100%">↺ Reset</button>
-    </div>
-
-    <!-- Fine Adjustments -->
-    <div class="slider-ctrl-list">
-      <!-- Uniform Zoom -->
-      <div class="slider-ctrl-row">
-        <div class="slider-info">
-          <span class="slider-label">ZOOM (ALL 4 EDGES)</span>
-          <span class="slider-val" id="popZoomVal">100%</span>
+  <main>
+    <!-- ============================== NOW -->
+    <section class="panel" data-panel="now" role="tabpanel" aria-labelledby="tab-now">
+      <div class="card now" id="now" aria-live="polite">
+        <div class="now-empty" id="nowEmpty">
+          <i data-icon="now" class="empty-ic"></i>
+          <p><strong>No video here yet</strong><br>Open a video or streaming site and start playing — controls appear here and on the video.</p>
         </div>
-        <div class="slider-track-wrap">
-          <button type="button" id="popZoomMinus" class="step-btn" title="Zoom out 5%">−</button>
-          <input type="range" id="popZoomRange" min="50" max="300" step="5" value="100">
-          <button type="button" id="popZoomPlus" class="step-btn" title="Zoom in 5%">+</button>
+        <div class="now-live" id="nowLive" hidden>
+          <div class="now-head">
+            <span class="tally" id="nowTally"></span>
+            <span id="nowSite"></span>
+            <span class="pill" id="nowMode" hidden></span>
+          </div>
+          <div class="res" id="nowRes">—</div>
+          <div class="telemetry-grid" id="nowTelemetry" hidden>
+            <div class="telemetry-pill"><span class="telemetry-label">Downloaded</span><span class="telemetry-val" id="telemetryDown">0 MB</span></div>
+            <div class="telemetry-pill"><span class="telemetry-label">Throughput</span><span class="telemetry-val" id="telemetrySpeed">0.00 Mbps</span></div>
+            <div class="telemetry-pill"><span class="telemetry-label">Buffer</span><span class="telemetry-val" id="telemetryBuffer">0 s</span></div>
+            <div class="telemetry-pill"><span class="telemetry-label">FPS / drops</span><span class="telemetry-val" id="telemetryFps">0 fps</span></div>
+          </div>
+          <p class="detail" id="nowDetail"></p>
+          <p class="detail" id="nowKept"></p>
+          <p class="warn" id="nowWarn" hidden></p>
         </div>
       </div>
 
-      <!-- Horizontal Stretch (Left + Right Same Time) -->
-      <div class="slider-ctrl-row">
-        <div class="slider-info">
-          <span class="slider-label">↔ STRETCH LEFT + RIGHT</span>
-          <span class="slider-val" id="popSxVal">100%</span>
+      <div class="card">
+        <div class="card-head"><h2>Quick actions</h2><span class="hint-key" id="qaHint"></span></div>
+        <div class="qa-grid">
+          <button type="button" class="qa" id="toggleHudBtn" data-tip="Show or hide the floating toolbar on the video"><i data-icon="toolbar"></i><span>Toolbar</span></button>
+          <button type="button" class="qa" id="qaFill" data-tip="Zoom in until the black bars are gone"><i data-icon="fill"></i><span>Hide bars</span></button>
+          <button type="button" class="qa" id="qaBackdrop" data-tip="Cycle ambient light / blur fill for black bars"><i data-icon="backdrop"></i><span id="qaBackdropLabel">Ambient</span></button>
+          <button type="button" class="qa" id="qaPip" data-tip="Picture-in-Picture"><i data-icon="pip"></i><span>PiP</span></button>
+          <button type="button" class="qa" id="qaWinfs" data-tip="Fill the browser window with the video"><i data-icon="winfs"></i><span>Window</span></button>
+          <button type="button" class="qa" id="qaFs" data-tip="Fullscreen"><i data-icon="fullscreen"></i><span>Fullscreen</span></button>
+          <button type="button" class="qa" id="qaLights" data-tip="Dim everything around the video"><i data-icon="lights"></i><span>Lights off</span></button>
+          <button type="button" class="qa" id="qaSnap" data-tip="Save the current frame as a PNG"><i data-icon="snapshot"></i><span>Snapshot</span></button>
+          <button type="button" class="qa" id="toggleNerdsBtn" data-tip="Stats for nerds overlay (Alt+Shift+N)"><i data-icon="stats"></i><span>Stats</span></button>
         </div>
-        <div class="slider-track-wrap">
-          <button type="button" id="popSxMinus" class="step-btn" title="Compress left + right 5%">−</button>
-          <input type="range" id="popSxRange" min="50" max="200" step="5" value="100">
-          <button type="button" id="popSxPlus" class="step-btn" title="Stretch left + right 5%">+</button>
+        <div class="row-actions">
+          <button type="button" class="btn" id="reload"><i data-icon="reload"></i>Reload tab</button>
+          <button type="button" class="btn" id="resetLevel" hidden>Reset fallback</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== DISPLAY -->
+    <section class="panel" data-panel="display" role="tabpanel" aria-labelledby="tab-display" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Fit &amp; aspect ratio</h2><span class="pill accent" id="ctrlModeTag">Original</span></div>
+        <div class="seg" id="dispMode" role="radiogroup" aria-label="Display mode">
+          <button type="button" data-v="original" data-tip="As the site shows it">Original</button>
+          <button type="button" data-v="fit" data-tip="Largest size without cropping">Fit</button>
+          <button type="button" data-v="fill" data-tip="Zoom in until the black bars are gone">Fill</button>
+          <button type="button" data-v="stretch" data-tip="Stretch to the edges, nothing cropped">Stretch</button>
+        </div>
+        <div class="chips" id="aspectChips">
+          <button type="button" class="chip" data-a="1.3333">4:3</button>
+          <button type="button" class="chip" data-a="1.7778">16:9</button>
+          <button type="button" class="chip" data-a="1.85">1.85</button>
+          <button type="button" class="chip" data-a="2.3704">21:9</button>
+          <button type="button" class="chip" data-a="2.39">2.39</button>
+          <button type="button" class="chip" data-a="3.5556">32:9</button>
+        </div>
+        <div class="inline-form">
+          <input type="text" id="customAspect" placeholder="Custom ratio, e.g. 18:9 or 2.2" aria-label="Custom aspect ratio">
+          <button type="button" class="btn" id="customAspectApply">Apply</button>
         </div>
       </div>
 
-      <!-- Vertical Stretch (Top + Bottom Same Time) -->
-      <div class="slider-ctrl-row">
-        <div class="slider-info">
-          <span class="slider-label">↕ STRETCH TOP + BOTTOM</span>
-          <span class="slider-val" id="popSyVal">100%</span>
+      <div class="card">
+        <div class="card-head"><h2>Black bars inside the video</h2></div>
+        <p class="note">Some files have the film’s bars encoded into the picture. Fill zooms past them: Auto detects them where the site allows it, or pick the film’s shape (most movies are 2.39).</p>
+        <div class="chips" id="innerChips">
+          <button type="button" class="chip" data-i="0">Auto</button>
+          <button type="button" class="chip" data-i="2.39">2.39</button>
+          <button type="button" class="chip" data-i="2.2">2.20</button>
+          <button type="button" class="chip" data-i="2">2.00</button>
+          <button type="button" class="chip" data-i="1.85">1.85</button>
+          <button type="button" class="chip" data-i="-2">Manual</button>
+          <button type="button" class="chip" data-i="-1">None</button>
         </div>
-        <div class="slider-track-wrap">
-          <button type="button" id="popSyMinus" class="step-btn" title="Compress top + bottom 5%">−</button>
-          <input type="range" id="popSyRange" min="50" max="200" step="5" value="100">
-          <button type="button" id="popSyPlus" class="step-btn" title="Stretch top + bottom 5%">+</button>
+        <div id="barsManual" hidden>
+          <div class="sl">
+            <label for="barT">Top + bottom</label><output id="barTVal">0%</output>
+            <input type="range" id="barT" min="0" max="35" step="0.5" value="0">
+          </div>
+          <div class="sl">
+            <label for="barL">Left + right</label><output id="barLVal">0%</output>
+            <input type="range" id="barL" min="0" max="35" step="0.5" value="0">
+          </div>
+          <label class="toggle">
+            <span><strong>Link both</strong><small>Move top/bottom and left/right together.</small></span>
+            <input type="checkbox" id="barLink"><span class="mini-switch"></span>
+          </label>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="sites">
-    <h2>Lock per site</h2>
-    <div class="site" data-site="netflix">
-      <span class="tally"></span><span class="name">Netflix</span>
-      <select aria-label="Netflix quality lock"></select>
-    </div>
-    <div class="site" data-site="prime">
-      <span class="tally"></span><span class="name">Prime Video</span>
-      <select aria-label="Prime Video quality lock"></select>
-    </div>
-    <div class="site" data-site="hotstar">
-      <span class="tally"></span><span class="name">JioHotstar</span>
-      <select aria-label="JioHotstar quality lock"></select>
-    </div>
-    <div class="site" data-site="other">
-      <span class="tally"></span><span class="name">Other / Web Video</span>
-      <select aria-label="Other video quality lock"></select>
-    </div>
-    <p class="hint" id="applyHint" hidden>Reload the tab to apply this to the current video.</p>
-  </section>
-
-  <section class="opts">
-    <!-- Video Controller Shortcuts Customization -->
-    <div class="shortcut-config-block">
-      <div class="shortcut-block-head">
-        <h2>Video Controller Shortcuts</h2>
-        <button type="button" id="editShortcuts" class="shortcut-edit-btn" title="Open chrome://extensions/shortcuts">Change…</button>
+        <p class="note" id="innerNote"></p>
       </div>
 
-      <div class="shortcut-item">
-        <div class="shortcut-info">
-          <span class="shortcut-title">Controller HUD</span>
-          <span class="shortcut-sub">Floating bar, also in fullscreen</span>
+      <div class="card">
+        <div class="card-head"><h2>Zoom, stretch &amp; rotate</h2><button type="button" class="link" id="btnResetTransform">Reset all</button></div>
+        <div class="sl">
+          <label for="popZoomRange">Zoom</label><output id="popZoomVal">100%</output>
+          <div class="sl-track"><button type="button" class="step" id="popZoomMinus" aria-label="Zoom out">−</button><input type="range" id="popZoomRange" min="25" max="300" step="1" value="100"><button type="button" class="step" id="popZoomPlus" aria-label="Zoom in">+</button></div>
         </div>
-        <span class="shortcut-key" id="keyHud">—</span>
+        <div class="sl">
+          <label for="popSxRange">↔ Stretch left + right</label><output id="popSxVal">100%</output>
+          <div class="sl-track"><button type="button" class="step" id="popSxMinus" aria-label="Narrower">−</button><input type="range" id="popSxRange" min="50" max="200" step="1" value="100"><button type="button" class="step" id="popSxPlus" aria-label="Wider">+</button></div>
+        </div>
+        <div class="sl">
+          <label for="popSyRange">↕ Stretch top + bottom</label><output id="popSyVal">100%</output>
+          <div class="sl-track"><button type="button" class="step" id="popSyMinus" aria-label="Shorter">−</button><input type="range" id="popSyRange" min="50" max="200" step="1" value="100"><button type="button" class="step" id="popSyPlus" aria-label="Taller">+</button></div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn" id="rotL"><i data-icon="rotateL"></i>Left</button>
+          <button type="button" class="btn" id="rotR"><i data-icon="rotate"></i>Right</button>
+          <button type="button" class="btn" id="flipBtn"><i data-icon="flip"></i>Mirror</button>
+        </div>
+        <p class="note" id="dispNote">Shift + arrows stretch, Shift + / − zoom, Shift + 0 resets — on the video page.</p>
       </div>
 
-      <div class="shortcut-item">
-        <div class="shortcut-info">
-          <span class="shortcut-title">Quick Fix Ratio</span>
-          <span class="shortcut-sub">Cycles Fix Ratio, Stretch &amp; Zoom</span>
+      <div class="card">
+        <div class="card-head"><h2>Black bar backdrop</h2><span class="pill" id="bdState" hidden></span></div>
+        <p class="note">Fills the black bars without zooming or cropping the picture — including bars inside the video, set below under “Black bars inside the video”.</p>
+        <div class="seg" id="bdMode" role="radiogroup" aria-label="Backdrop">
+          <button type="button" data-v="off">Off</button>
+          <button type="button" data-v="ambient" data-tip="Bars glow with the colours at the picture’s edges">Ambient light</button>
+          <button type="button" data-v="blur" data-tip="Bars show a soft, blurred copy of the picture">Blur fill</button>
         </div>
-        <span class="shortcut-key" id="keyRatio">—</span>
+        <div class="sl">
+          <label for="bdIntensity">Intensity</label><output id="bdIntensityVal">80%</output>
+          <input type="range" id="bdIntensity" min="0" max="100" step="1" value="80">
+        </div>
+        <div class="sl">
+          <label for="bdBlur">Softness</label><output id="bdBlurVal">50%</output>
+          <input type="range" id="bdBlur" min="0" max="100" step="1" value="50">
+        </div>
+        <p class="note warn" id="bdNote" hidden></p>
       </div>
-      <p class="shortcut-tip">Zoom in / out and Reset can also get keys there.</p>
-    </div>
 
-    <label class="opt">
-      <input type="checkbox" id="vcShowOsd">
-      <span>Show on-screen OSD notification badge when video shortcut or preset is used.</span>
-    </label>
-    <label class="opt">
-      <input type="checkbox" id="nerds">
-      <span>Show on-screen <strong>Stats for Nerds</strong> HUD with live throughput, FPS, and data consumption. Toggle with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>.</span>
-    </label>
-    <label class="opt">
-      <input type="checkbox" id="overlay">
-      <span>Show compact resolution badge. It always appears for a few seconds on quality changes. Toggle with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd>.</span>
-    </label>
-    <label class="opt">
-      <input type="checkbox" id="deepMode">
-      <span>Deep mode, for players that load the manifest in a background worker. Turn it off if the player stops loading.</span>
-    </label>
-  </section>
+      <div class="card">
+        <label class="toggle">
+          <span><strong>Remove bars inside the picture</strong><small>In Fill mode, also crop black bars that are part of the video itself.</small></span>
+          <input type="checkbox" id="smartCrop"><span class="mini-switch"></span>
+        </label>
+        <label class="toggle">
+          <span><strong>Remember per site</strong><small>Restore zoom, ratio and rotation next time on the same site.</small></span>
+          <input type="checkbox" id="rememberPerSite"><span class="mini-switch"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- ============================== PICTURE -->
+    <section class="panel" data-panel="picture" role="tabpanel" aria-labelledby="tab-picture" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Presets</h2><button type="button" class="link" id="picReset">Reset</button></div>
+        <div class="chips" id="picPresets"></div>
+      </div>
+      <div class="card" id="picSliders"></div>
+      <div class="card">
+        <div class="btn-row">
+          <button type="button" class="btn" id="picCompare" data-tip="Hold to see the original picture">Hold to compare</button>
+        </div>
+        <p class="note"><strong>Free:</strong> brightness below 100% and warmth — drawn as a light tint, the video itself isn’t processed. <strong>Light:</strong> contrast, saturation, grayscale, brightness above 100%. <strong>Heavy:</strong> gamma, and sharpness most of all. Keep heavy ones at default if playback stutters.</p>
+      </div>
+    </section>
+
+    <!-- ============================== PLAYBACK -->
+    <section class="panel" data-panel="playback" role="tabpanel" aria-labelledby="tab-playback" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Speed</h2><span class="big" id="speedBig">1×</span></div>
+        <div class="sl">
+          <div class="sl-track"><button type="button" class="step" id="speedMinus" aria-label="Slower">−</button><input type="range" id="speedRange" min="0.25" max="4" step="0.05" value="1" aria-label="Playback speed"><button type="button" class="step" id="speedPlus" aria-label="Faster">+</button></div>
+        </div>
+        <div class="chips" id="speedChips"></div>
+        <label class="toggle">
+          <span><strong>Remember speed</strong><small>Start the next video at the same speed.</small></span>
+          <input type="checkbox" id="rememberSpeed"><span class="mini-switch"></span>
+        </label>
+        <div class="field">
+          <span>Speed step</span>
+          <select id="speedStep"><option value="0.05">0.05×</option><option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option></select>
+        </div>
+        <div class="field">
+          <span>Seek step</span>
+          <select id="seekStep"><option value="5">5 s</option><option value="10">10 s</option><option value="15">15 s</option><option value="30">30 s</option><option value="60">60 s</option></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Mouse</h2></div>
+        <div class="field">
+          <span>Wheel over video = volume</span>
+          <select id="mouseWheel"><option value="off">Off</option><option value="fullscreen">In fullscreen</option><option value="always">Always</option></select>
+        </div>
+        <label class="toggle">
+          <span><strong>Right button + wheel = volume</strong><small>Hold right-click and scroll over the video. No menu pops up.</small></span>
+          <input type="checkbox" id="rightWheel"><span class="mini-switch"></span>
+        </label>
+        <div class="field">
+          <span>Back / forward buttons seek</span>
+          <select id="sideButtons"><option value="off">Off</option><option value="video">Over the video</option><option value="page">Anywhere on the page</option></select>
+        </div>
+        <div class="field">
+          <span>Volume step</span>
+          <select id="volumeStep"><option value="2">2%</option><option value="5">5%</option><option value="10">10%</option></select>
+        </div>
+        <label class="toggle">
+          <span><strong>Hide cursor in fullscreen</strong><small>When the mouse rests over the video.</small></span>
+          <input type="checkbox" id="hideCursor"><span class="mini-switch"></span>
+        </label>
+        <p class="note">Side buttons seek inside the video instead of going to the previous page. Some mouse software sends them as keys instead; then the browser handles them.</p>
+      </div>
+    </section>
+
+    <!-- ============================== QUALITY -->
+    <section class="panel" data-panel="quality" role="tabpanel" aria-labelledby="tab-quality" hidden>
+      <div class="card sites">
+        <div class="card-head"><h2>Lock per site</h2></div>
+        <p class="note">Removes the lower renditions so the player buffers instead of dropping to 480p/720p.</p>
+        <div class="site" data-site="netflix"><span class="tally"></span><span class="name">Netflix</span><select aria-label="Netflix quality lock"></select></div>
+        <div class="site" data-site="prime"><span class="tally"></span><span class="name">Prime Video</span><select aria-label="Prime Video quality lock"></select></div>
+        <div class="site" data-site="hotstar"><span class="tally"></span><span class="name">JioHotstar</span><select aria-label="JioHotstar quality lock"></select></div>
+        <div class="site" data-site="other"><span class="tally"></span><span class="name">Other sites</span><select aria-label="Other video quality lock"></select></div>
+        <p class="hint" id="applyHint" hidden>Reload the tab to apply this to the current video.</p>
+      </div>
+      <div class="card">
+        <label class="toggle">
+          <span><strong>Stats for nerds overlay</strong><small>Throughput, FPS, drops and data use. <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></small></span>
+          <input type="checkbox" id="nerds"><span class="mini-switch"></span>
+        </label>
+        <label class="toggle">
+          <span><strong>Resolution badge</strong><small>Always shown for a few seconds on quality changes. <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd></small></span>
+          <input type="checkbox" id="overlay"><span class="mini-switch"></span>
+        </label>
+        <label class="toggle">
+          <span><strong>Deep mode</strong><small>For players that load the manifest in a background worker. Turn off if the player stops loading.</small></span>
+          <input type="checkbox" id="deepMode"><span class="mini-switch"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- ============================== SETTINGS -->
+    <section class="panel" data-panel="settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <div class="card">
+        <label class="toggle">
+          <span><strong>Video controls</strong><small>Toolbar, display, picture, mouse and keyboard features.</small></span>
+          <input type="checkbox" id="vcEnabled"><span class="mini-switch"></span>
+        </label>
+        <label class="toggle">
+          <span><strong>On-screen notifications</strong><small>Short badge on the video when something changes.</small></span>
+          <input type="checkbox" id="vcShowOsd"><span class="mini-switch"></span>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Floating toolbar</h2></div>
+        <div class="field-col">
+          <span>Show</span>
+          <div class="seg" id="tbShow" role="radiogroup" aria-label="When to show the toolbar">
+            <button type="button" data-v="hover" data-tip="When the mouse moves over the video">On hover</button>
+            <button type="button" data-v="always" data-tip="Whenever the mouse moves">Always</button>
+            <button type="button" data-v="manual" data-tip="Only after the shortcut or the popup button">Shortcut only</button>
+          </div>
+        </div>
+        <div class="field-col">
+          <span>Layout</span>
+          <div class="seg" id="tbLayout" role="radiogroup" aria-label="Toolbar layout">
+            <button type="button" data-v="compact">Compact</button>
+            <button type="button" data-v="expanded" data-tip="Adds the timeline with hover previews">Expanded</button>
+          </div>
+        </div>
+        <div class="field-col">
+          <span>Theme</span>
+          <div class="themes" id="tbTheme" role="radiogroup" aria-label="Toolbar theme">
+            <button type="button" class="theme" data-v="glass"><span class="sw sw-glass"><i></i><i></i><i></i></span>Glass</button>
+            <button type="button" class="theme" data-v="dark"><span class="sw sw-dark"><i></i><i></i><i></i></span>Dark</button>
+            <button type="button" class="theme" data-v="light"><span class="sw sw-light"><i></i><i></i><i></i></span>Light</button>
+          </div>
+        </div>
+        <div class="field-col">
+          <span>Accent colours</span>
+          <div class="accents" id="tbAccent" role="radiogroup" aria-label="Accent colours"></div>
+          <div class="custom-colors" id="customColors" hidden>
+            <label>Primary <input type="color" id="accentP"></label>
+            <label>Secondary <input type="color" id="accentS"></label>
+          </div>
+        </div>
+        <div class="field">
+          <span>Auto-hide when idle</span>
+          <select id="tbAutoHide"><option value="0">Never</option><option value="2">After 2 s</option><option value="3">After 3 s</option><option value="5">After 5 s</option><option value="8">After 8 s</option></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Toolbar buttons</h2><button type="button" class="link" id="btnOrderReset">Reset</button></div>
+        <p class="note">Drag to reorder, switch to show or hide.</p>
+        <ul class="btn-list" id="btnList"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Keyboard shortcuts</h2><button type="button" class="link" id="editShortcuts">Change…</button></div>
+        <ul class="keys" id="keyList"></ul>
+        <ul class="keys fixed">
+          <li><span>Stretch / zoom / reset</span><span><kbd>Shift</kbd> + arrows · <kbd>Shift</kbd> + <kbd>+</kbd>/<kbd>−</kbd> · <kbd>Shift</kbd> + <kbd>0</kbd></span></li>
+          <li><span>Stats for nerds · badge</span><span><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> · <kbd>Q</kbd></span></li>
+          <li><span>Leave window fill</span><span><kbd>Esc</kbd></span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="btn-row">
+          <button type="button" class="btn danger" id="resetAll">Reset all settings</button>
+        </div>
+        <p class="note center" id="versionNote"></p>
+      </div>
+    </section>
+  </main>
+
+  <div class="tip" id="tip" role="tooltip" hidden></div>
 
   <script src="defaults.js"></script>
   <script src="popup.js"></script>

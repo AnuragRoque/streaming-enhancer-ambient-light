@@ -1,10 +1,14 @@
 {
   "manifest_version": 3,
   "name": "QualityLock",
-  "version": "1.0.0",
-  "description": "Stops video players from dropping to low quality and provides live Stats for Nerds telemetry and data usage tracking.",
+  "version": "1.2.0",
+  "description": "Keeps streams at top quality, plus a floating video toolbar: fill/zoom/aspect, ambient light, picture filters, speed, PiP and mouse controls.",
   "permissions": [
-    "storage"
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
@@ -25,26 +29,34 @@
   },
   "commands": {
     "toggle-video-hud": {
-      "suggested_key": {
-        "default": "Alt+Z"
-      },
-      "description": "Show / hide the Video Controller"
+      "suggested_key": { "default": "Alt+Z" },
+      "description": "Show / hide the floating video toolbar"
     },
     "quick-ratio": {
-      "suggested_key": {
-        "default": "Alt+X"
-      },
-      "description": "Cycle Fix Ratio and zoom presets"
+      "suggested_key": { "default": "Alt+X" },
+      "description": "Cycle Fill, Stretch, 16:9, 21:9 and zoom presets"
     },
-    "zoom-in": {
-      "description": "Zoom video in 5%"
+    "speed-up": {
+      "suggested_key": { "default": "Alt+Period" },
+      "description": "Speed up"
     },
-    "zoom-out": {
-      "description": "Zoom video out 5%"
+    "speed-down": {
+      "suggested_key": { "default": "Alt+Comma" },
+      "description": "Slow down"
     },
-    "reset-video": {
-      "description": "Reset video zoom and stretch to 100%"
-    }
+    "speed-reset": { "description": "Normal speed (1×)" },
+    "seek-back": { "description": "Seek back (step set in the popup)" },
+    "seek-forward": { "description": "Seek forward (step set in the popup)" },
+    "toggle-fill": { "description": "Hide black bars on / off" },
+    "cycle-backdrop": { "description": "Cycle ambient light / blur fill / off" },
+    "toggle-pip": { "description": "Picture-in-Picture" },
+    "toggle-fullscreen": { "description": "Fullscreen (player)" },
+    "window-fullscreen": { "description": "Fill the browser window" },
+    "toggle-lights": { "description": "Lights off (dim the page)" },
+    "snapshot": { "description": "Save the current frame as PNG" },
+    "zoom-in": { "description": "Zoom video in 5%" },
+    "zoom-out": { "description": "Zoom video out 5%" },
+    "reset-video": { "description": "Reset zoom, ratio and rotation" }
   },
   "content_scripts": [
     {
@@ -52,7 +64,8 @@
         "<all_urls>"
       ],
       "js": [
-        "inject.js"
+        "inject.js",
+        "player.js"
       ],
       "run_at": "document_start",
       "world": "MAIN",
