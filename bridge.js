@@ -20,6 +20,22 @@
     if (area === 'sync' && changes[QLOCK_KEY]) push(qlockMerge(QLOCK_DEFAULTS, changes[QLOCK_KEY].newValue));
   });
 
+  // Frame routing (background.js): the top frame clears the tab's record on each
+  // new document, and every frame reports how good its video is.
+  function toBackground(msg) {
+    try { chrome.runtime.sendMessage(msg, function () { void chrome.runtime.lastError; }); } catch (e) { /* extension reloaded */ }
+  }
+  if (window === window.top) toBackground({ type: 'qlock:frameReset' });
+
+  var lastScore = 0;
+  window.addEventListener('message', function (e) {
+    if (e.source !== window || !e.data || e.data.__qlock !== 'videoScore') return;
+    var score = +e.data.score;
+    if (!isFinite(score) || score < 0 || score === lastScore) return;
+    lastScore = score;
+    toBackground({ type: 'qlock:videoScore', score: score });
+  });
+
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (!msg || typeof msg !== 'object') return false;
 
@@ -50,6 +66,18 @@
 
     if (msg.type === 'qlock:toggleNerds') {
       window.postMessage({ __qlock: 'toggleNerds' }, location.origin);
+      sendResponse(true);
+      return false;
+    }
+
+    if (msg.type === 'qlock:toggleVideoController') {
+      window.postMessage({ __qlock: 'toggleVideoController' }, location.origin);
+      sendResponse(true);
+      return false;
+    }
+
+    if (msg.type === 'qlock:videoTransform') {
+      window.postMessage({ __qlock: 'videoTransform', action: msg.action, params: msg.params, keys: msg.keys }, location.origin);
       sendResponse(true);
       return false;
     }

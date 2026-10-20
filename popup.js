@@ -10,6 +10,8 @@
 
   var settings = null;
   var tabId = null;
+  var frameId = 0;  // frame holding the tab's main video (see background.js)
+  var keys = { hud: '', ratio: '' };
   var currentSite = null;
   var $ = function (id) { return document.getElementById(id); };
 
@@ -39,12 +41,51 @@
     $('reload').classList.add('primary');
   }
 
+  var isUserAdjustingSlider = false;
+
+  function sendToTab(msg, cb) {
+    if (tabId === null) return;
+    chrome.tabs.sendMessage(tabId, msg, { frameId: frameId }, function (res) {
+      if (chrome.runtime.lastError) res = undefined;
+      if (cb) cb(res);
+    });
+  }
+
+  function sendVideoAction(action, params) {
+    sendToTab({ type: 'qlock:videoTransform', action: action, params: params, keys: keys });
+  }
+
+  function toggleVideoHud() {
+    sendVideoAction('toggleHud');
+  }
+
+  function loadShortcuts() {
+    chrome.commands.getAll(function (cmds) {
+      (cmds || []).forEach(function (c) {
+        if (c.name === 'toggle-video-hud') keys.hud = c.shortcut || '';
+        if (c.name === 'quick-ratio') keys.ratio = c.shortcut || '';
+      });
+      [['keyHud', keys.hud], ['keyRatio', keys.ratio]].forEach(function (p) {
+        var el = $(p[0]);
+        if (!el) return;
+        el.textContent = p[1] || 'Not set';
+        el.classList.toggle('unset', !p[1]);
+      });
+      if ($('toggleHudBtn')) $('toggleHudBtn').title = 'Toggle Video Controller HUD' + (keys.hud ? ' (' + keys.hud + ')' : '');
+    });
+  }
+
   function renderSettings() {
     $('enabled').checked = !!settings.enabled;
     document.body.classList.toggle('disabled', !settings.enabled);
     $('overlay').checked = !!settings.overlay;
     if ($('nerds')) $('nerds').checked = !!settings.nerds;
     $('deepMode').checked = !!settings.deepMode;
+
+    // Video Controller settings
+    var vc = settings.videoController || {};
+    if ($('vcShowOsd')) $('vcShowOsd').checked = vc.showOsd !== false;
+
     document.querySelectorAll('.site').forEach(function (row) {
       var site = row.getAttribute('data-site');
       var s = settings.sites[site] || { enabled: true, mode: 'best', floor: 1080 };
@@ -137,14 +178,48 @@
     var tally = $('nowTally');
     tally.className = 'tally' + (level > 0 ? ' bad' : st.manifestsFiltered && p && p.width ? ' ok' : st.cfg.enabled ? ' on' : '');
 
+    if (st.videoTransform) {
+      var vt = st.videoTransform;
+      var zPct = Math.round((vt.zoom || 1) * 100);
+      var sxPct = Math.round((vt.scaleX || 1) * 100);
+      var syPct = Math.round((vt.scaleY || 1) * 100);
+
+      if ($('popZoomVal')) $('popZoomVal').textContent = zPct + '%';
+      if ($('popSxVal')) $('popSxVal').textContent = sxPct + '%';
+      if ($('popSyVal')) $('popSyVal').textContent = syPct + '%';
+
+      if (!isUserAdjustingSlider) {
+        if ($('popZoomRange')) $('popZoomRange').value = zPct;
+        if ($('popSxRange')) $('popSxRange').value = sxPct;
+        if ($('popSyRange')) $('popSyRange').value = syPct;
+      }
+
+      if ($('ctrlModeTag')) {
+        var modeLabels = {
+          original: '100% Original',
+          fill: '✨ Fix Ratio (' + zPct + '%)',
+          'stretch-fill': '↔ Stretch Fill',
+          '16:9': '16:9 Stretch',
+          '21:9': '21:9 Ultrawide',
+          custom: 'Custom (' + zPct + '%)'
+        };
+        $('ctrlModeTag').textContent = modeLabels[vt.mode] || ('Zoom ' + zPct + '%');
+      }
+    }
+
     renderSettings();
   }
 
   function poll() {
     if (tabId === null) return;
-    chrome.tabs.sendMessage(tabId, { type: 'qlock:status' }, { frameId: 0 }, function (status) {
-      if (chrome.runtime.lastError || !status) { showEmpty(); return; }
-      renderStatus(status);
+    chrome.runtime.sendMessage({ type: 'qlock:pickFrame', tabId: tabId }, function (id) {
+      frameId = !chrome.runtime.lastError && typeof id === 'number' ? id : 0;
+      sendToTab({ type: 'qlock:status' }, function (status) {
+        if (status) { renderStatus(status); return; }
+        if (frameId === 0) { showEmpty(); return; }
+        frameId = 0;
+        sendToTab({ type: 'qlock:status' }, function (st) { if (st) renderStatus(st); else showEmpty(); });
+      });
     });
   }
 
@@ -184,17 +259,101 @@
   });
   $('resetLevel').addEventListener('click', function () {
     if (tabId === null) return;
-    chrome.tabs.sendMessage(tabId, { type: 'qlock:resetLevel' }, { frameId: 0 }, function () {
-      void chrome.runtime.lastError;
+    sendToTab({ type: 'qlock:resetLevel' }, function () {
       chrome.tabs.reload(tabId);
     });
   });
   if ($('toggleNerdsBtn')) {
     $('toggleNerdsBtn').addEventListener('click', function () {
-      if (tabId === null) return;
-      chrome.tabs.sendMessage(tabId, { type: 'qlock:toggleNerds' }, { frameId: 0 }, function () {
-        void chrome.runtime.lastError;
+      sendToTab({ type: 'qlock:toggleNerds' });
+    });
+  }
+
+  // Video Controller buttons
+  if ($('toggleHudBtn')) {
+    $('toggleHudBtn').addEventListener('click', function () {
+      toggleVideoHud();
+    });
+  }
+  if ($('btnFixRatio')) {
+    $('btnFixRatio').addEventListener('click', function () {
+      sendVideoAction('fixRatio');
+    });
+  }
+  if ($('btnStretchFill')) {
+    $('btnStretchFill').addEventListener('click', function () {
+      sendVideoAction('stretchFill');
+    });
+  }
+  if ($('btnPreset169')) {
+    $('btnPreset169').addEventListener('click', function () {
+      sendVideoAction('preset169');
+    });
+  }
+  if ($('btnPreset219')) {
+    $('btnPreset219').addEventListener('click', function () {
+      sendVideoAction('preset219');
+    });
+  }
+  if ($('btnResetTransform')) {
+    $('btnResetTransform').addEventListener('click', function () {
+      sendVideoAction('reset');
+    });
+  }
+
+  // Sliders
+  function wireSlider(rangeId, valId, minusId, plusId, min, max, step, actionName, paramName) {
+    var range = $(rangeId);
+    var valEl = $(valId);
+    var minus = $(minusId);
+    var plus = $(plusId);
+    if (!range) return;
+
+    function applyVal(n) {
+      if (valEl) valEl.textContent = n + '%';
+      var params = {};
+      params[paramName] = n / 100;
+      sendVideoAction(actionName, params);
+    }
+
+    range.addEventListener('input', function (e) {
+      isUserAdjustingSlider = true;
+      applyVal(+e.target.value);
+    });
+    range.addEventListener('change', function () {
+      setTimeout(function () { isUserAdjustingSlider = false; }, 400);
+    });
+    if (minus) {
+      minus.addEventListener('click', function () {
+        var n = Math.max(min, (+range.value) - step);
+        range.value = n;
+        applyVal(n);
       });
+    }
+    if (plus) {
+      plus.addEventListener('click', function () {
+        var n = Math.min(max, (+range.value) + step);
+        range.value = n;
+        applyVal(n);
+      });
+    }
+  }
+
+  wireSlider('popZoomRange', 'popZoomVal', 'popZoomMinus', 'popZoomPlus', 50, 300, 5, 'setZoom', 'zoom');
+  wireSlider('popSxRange', 'popSxVal', 'popSxMinus', 'popSxPlus', 50, 200, 5, 'setStretchX', 'scaleX');
+  wireSlider('popSyRange', 'popSyVal', 'popSyMinus', 'popSyPlus', 50, 200, 5, 'setStretchY', 'scaleY');
+
+  // Shortcuts are extension commands; Chrome owns the editor for them.
+  if ($('editShortcuts')) {
+    $('editShortcuts').addEventListener('click', function () {
+      chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+    });
+  }
+  if ($('vcShowOsd')) {
+    $('vcShowOsd').addEventListener('change', function (e) {
+      if (!settings.videoController) settings.videoController = {};
+      settings.videoController.showOsd = e.target.checked;
+      save();
     });
   }
 
@@ -202,6 +361,7 @@
   chrome.storage.sync.get(QLOCK_KEY, function (r) {
     settings = qlockMerge(QLOCK_DEFAULTS, r && r[QLOCK_KEY]);
     renderSettings();
+    loadShortcuts();
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       tabId = tabs && tabs[0] ? tabs[0].id : null;
       poll();

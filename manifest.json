@@ -3,7 +3,12 @@
   "name": "QualityLock",
   "version": "1.0.0",
   "description": "Stops video players from dropping to low quality and provides live Stats for Nerds telemetry and data usage tracking.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "QualityLock",
@@ -18,17 +23,49 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "commands": {
+    "toggle-video-hud": {
+      "suggested_key": {
+        "default": "Alt+Z"
+      },
+      "description": "Show / hide the Video Controller"
+    },
+    "quick-ratio": {
+      "suggested_key": {
+        "default": "Alt+X"
+      },
+      "description": "Cycle Fix Ratio and zoom presets"
+    },
+    "zoom-in": {
+      "description": "Zoom video in 5%"
+    },
+    "zoom-out": {
+      "description": "Zoom video out 5%"
+    },
+    "reset-video": {
+      "description": "Reset video zoom and stretch to 100%"
+    }
+  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["inject.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "inject.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["defaults.js", "bridge.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "defaults.js",
+        "bridge.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }

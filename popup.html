@@ -46,9 +46,69 @@
       <p class="detail" id="nowKept"></p>
       <p class="warn" id="nowWarn" hidden></p>
       <div class="actions">
+        <button type="button" id="toggleHudBtn" class="hud-btn" title="Toggle Video Controller HUD">Video Controller</button>
         <button type="button" id="toggleNerdsBtn" class="nerds-btn" title="Toggle Stats for Nerds HUD (Alt+Shift+N)">Stats for Nerds</button>
         <button type="button" id="reload">Reload tab</button>
         <button type="button" id="resetLevel" hidden>Reset fallback</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Video Controller & Zoom Section -->
+  <section class="video-ctrl" id="videoCtrlSection">
+    <div class="section-head">
+      <h2>Video Controller & Zoom</h2>
+      <span class="ctrl-mode-tag" id="ctrlModeTag">100% Original</span>
+    </div>
+
+    <!-- Quick Presets -->
+    <div class="preset-btn-grid">
+      <button type="button" id="btnFixRatio" class="preset-btn primary" title="Auto zoom to eliminate black bars in fullscreen or window without distortion">✨ Fix Ratio</button>
+      <button type="button" id="btnStretchFill" class="preset-btn" title="Stretch edges to fill display without cropping">↔ Stretch Fill</button>
+      <button type="button" id="btnPreset169" class="preset-btn" title="Stretch horizontally to 16:9 widescreen">16:9</button>
+      <button type="button" id="btnPreset219" class="preset-btn" title="Stretch to 21:9 Cinemascope ultrawide">21:9</button>
+      <button type="button" id="btnResetTransform" class="preset-btn" title="Reset all zoom and stretch to 100%">↺ Reset</button>
+    </div>
+
+    <!-- Fine Adjustments -->
+    <div class="slider-ctrl-list">
+      <!-- Uniform Zoom -->
+      <div class="slider-ctrl-row">
+        <div class="slider-info">
+          <span class="slider-label">ZOOM (ALL 4 EDGES)</span>
+          <span class="slider-val" id="popZoomVal">100%</span>
+        </div>
+        <div class="slider-track-wrap">
+          <button type="button" id="popZoomMinus" class="step-btn" title="Zoom out 5%">−</button>
+          <input type="range" id="popZoomRange" min="50" max="300" step="5" value="100">
+          <button type="button" id="popZoomPlus" class="step-btn" title="Zoom in 5%">+</button>
+        </div>
+      </div>
+
+      <!-- Horizontal Stretch (Left + Right Same Time) -->
+      <div class="slider-ctrl-row">
+        <div class="slider-info">
+          <span class="slider-label">↔ STRETCH LEFT + RIGHT</span>
+          <span class="slider-val" id="popSxVal">100%</span>
+        </div>
+        <div class="slider-track-wrap">
+          <button type="button" id="popSxMinus" class="step-btn" title="Compress left + right 5%">−</button>
+          <input type="range" id="popSxRange" min="50" max="200" step="5" value="100">
+          <button type="button" id="popSxPlus" class="step-btn" title="Stretch left + right 5%">+</button>
+        </div>
+      </div>
+
+      <!-- Vertical Stretch (Top + Bottom Same Time) -->
+      <div class="slider-ctrl-row">
+        <div class="slider-info">
+          <span class="slider-label">↕ STRETCH TOP + BOTTOM</span>
+          <span class="slider-val" id="popSyVal">100%</span>
+        </div>
+        <div class="slider-track-wrap">
+          <button type="button" id="popSyMinus" class="step-btn" title="Compress top + bottom 5%">−</button>
+          <input type="range" id="popSyRange" min="50" max="200" step="5" value="100">
+          <button type="button" id="popSyPlus" class="step-btn" title="Stretch top + bottom 5%">+</button>
+        </div>
       </div>
     </div>
   </section>
@@ -75,6 +135,35 @@
   </section>
 
   <section class="opts">
+    <!-- Video Controller Shortcuts Customization -->
+    <div class="shortcut-config-block">
+      <div class="shortcut-block-head">
+        <h2>Video Controller Shortcuts</h2>
+        <button type="button" id="editShortcuts" class="shortcut-edit-btn" title="Open chrome://extensions/shortcuts">Change…</button>
+      </div>
+
+      <div class="shortcut-item">
+        <div class="shortcut-info">
+          <span class="shortcut-title">Controller HUD</span>
+          <span class="shortcut-sub">Floating bar, also in fullscreen</span>
+        </div>
+        <span class="shortcut-key" id="keyHud">—</span>
+      </div>
+
+      <div class="shortcut-item">
+        <div class="shortcut-info">
+          <span class="shortcut-title">Quick Fix Ratio</span>
+          <span class="shortcut-sub">Cycles Fix Ratio, Stretch &amp; Zoom</span>
+        </div>
+        <span class="shortcut-key" id="keyRatio">—</span>
+      </div>
+      <p class="shortcut-tip">Zoom in / out and Reset can also get keys there.</p>
+    </div>
+
+    <label class="opt">
+      <input type="checkbox" id="vcShowOsd">
+      <span>Show on-screen OSD notification badge when video shortcut or preset is used.</span>
+    </label>
     <label class="opt">
       <input type="checkbox" id="nerds">
       <span>Show on-screen <strong>Stats for Nerds</strong> HUD with live throughput, FPS, and data consumption. Toggle with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>.</span>

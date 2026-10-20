@@ -7,6 +7,11 @@ var QLOCK_DEFAULTS = {
   overlay: false,     // keep the compact on-screen readout visible (always pops up briefly on resolution change)
   nerds: false,       // persistent Stats for Nerds HUD overlay (Alt+Shift+N)
   deepMode: false,    // also hook Web Workers (experimental)
+  videoController: {
+    enabled: true,
+    showOsd: true     // on-screen badge when a zoom/ratio change is applied
+    // Shortcuts are extension commands (manifest.json), set at chrome://extensions/shortcuts.
+  },
   sites: {
     netflix: { enabled: true, mode: 'best', floor: 1080 },
     prime:   { enabled: true, mode: 'best', floor: 720 },
@@ -19,7 +24,7 @@ function qlockMerge(defaults, stored) {
   var out = JSON.parse(JSON.stringify(defaults));
   if (!stored || typeof stored !== 'object') return out;
   for (var k in stored) {
-    if (k === 'sites') continue;
+    if (k === 'sites' || k === 'videoController') continue;
     if (k in out) out[k] = stored[k];
   }
   if (stored.sites && typeof stored.sites === 'object') {
@@ -27,6 +32,12 @@ function qlockMerge(defaults, stored) {
       var src = stored.sites[s];
       if (!src || typeof src !== 'object') continue;
       for (var f in out.sites[s]) if (f in src) out.sites[s][f] = src[f];
+    }
+  }
+  if (stored.videoController && typeof stored.videoController === 'object') {
+    if (!out.videoController) out.videoController = {};
+    for (var vc in stored.videoController) {
+      out.videoController[vc] = stored.videoController[vc];
     }
   }
   return out;
