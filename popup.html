@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>QualityLock</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>QualityLock</h1>
+    <label class="switch" title="Turn QualityLock on or off everywhere">
+      <input type="checkbox" id="enabled">
+      <span class="track"><span class="knob"></span></span>
+    </label>
+  </header>
+
+  <section class="now" id="now" aria-live="polite">
+    <p class="now-empty" id="nowEmpty">Open any video or streaming site to see what's playing.</p>
+    <div class="now-live" id="nowLive" hidden>
+      <div class="now-head">
+        <span class="tally" id="nowTally"></span>
+        <span id="nowSite"></span>
+      </div>
+      <div class="res" id="nowRes">—</div>
+      
+      <div class="telemetry-grid" id="nowTelemetry" hidden>
+        <div class="telemetry-pill">
+          <span class="telemetry-label">DOWNLOAD</span>
+          <span class="telemetry-val" id="telemetryDown">0 MB</span>
+        </div>
+        <div class="telemetry-pill">
+          <span class="telemetry-label">SPEED</span>
+          <span class="telemetry-val" id="telemetrySpeed">0.00 Mbps</span>
+        </div>
+        <div class="telemetry-pill">
+          <span class="telemetry-label">BUFFER</span>
+          <span class="telemetry-val" id="telemetryBuffer">0 s</span>
+        </div>
+        <div class="telemetry-pill">
+          <span class="telemetry-label">FPS / DROPS</span>
+          <span class="telemetry-val" id="telemetryFps">0 fps</span>
+        </div>
+      </div>
+
+      <p class="detail" id="nowDetail"></p>
+      <p class="detail" id="nowKept"></p>
+      <p class="warn" id="nowWarn" hidden></p>
+      <div class="actions">
+        <button type="button" id="toggleNerdsBtn" class="nerds-btn" title="Toggle Stats for Nerds HUD (Alt+Shift+N)">Stats for Nerds</button>
+        <button type="button" id="reload">Reload tab</button>
+        <button type="button" id="resetLevel" hidden>Reset fallback</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="sites">
+    <h2>Lock per site</h2>
+    <div class="site" data-site="netflix">
+      <span class="tally"></span><span class="name">Netflix</span>
+      <select aria-label="Netflix quality lock"></select>
+    </div>
+    <div class="site" data-site="prime">
+      <span class="tally"></span><span class="name">Prime Video</span>
+      <select aria-label="Prime Video quality lock"></select>
+    </div>
+    <div class="site" data-site="hotstar">
+      <span class="tally"></span><span class="name">JioHotstar</span>
+      <select aria-label="JioHotstar quality lock"></select>
+    </div>
+    <div class="site" data-site="other">
+      <span class="tally"></span><span class="name">Other / Web Video</span>
+      <select aria-label="Other video quality lock"></select>
+    </div>
+    <p class="hint" id="applyHint" hidden>Reload the tab to apply this to the current video.</p>
+  </section>
+
+  <section class="opts">
+    <label class="opt">
+      <input type="checkbox" id="nerds">
+      <span>Show on-screen <strong>Stats for Nerds</strong> HUD with live throughput, FPS, and data consumption. Toggle with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>.</span>
+    </label>
+    <label class="opt">
+      <input type="checkbox" id="overlay">
+      <span>Show compact resolution badge. It always appears for a few seconds on quality changes. Toggle with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd>.</span>
+    </label>
+    <label class="opt">
+      <input type="checkbox" id="deepMode">
+      <span>Deep mode, for players that load the manifest in a background worker. Turn it off if the player stops loading.</span>
+    </label>
+  </section>
+
+  <script src="defaults.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
