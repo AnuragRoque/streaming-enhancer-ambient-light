@@ -14,7 +14,7 @@ QualityLock does two jobs:
 
 ### 🎛️ Floating toolbar (on the video)
 
-* Shows when the mouse moves over a video and fades when idle. It can also stay visible, or appear only via <kbd>Alt</kbd>+<kbd>Z</kbd>.
+* **Auto-hide** (default): shows when the mouse moves over a video and hides once the mouse stops (1–8 s, set in the popup). It also hides when the mouse rests on the toolbar, after a few extra seconds so you can still read tooltips. You can also pick **Always visible**, or **Shortcut only** (<kbd>Alt</kbd>+<kbd>Z</kbd>).
 * **Compact** layout (one row of icons) or **Expanded** layout (adds a timeline).
 * **Drag** it anywhere by the grip. It remembers its spot per site and stays in place relative to the player.
 * **Glass**, **Dark** and **Light** themes. Every button has a tooltip that shows its shortcut.
@@ -47,7 +47,8 @@ QualityLock does two jobs:
 * **Speed** 0.25×–4× from the toolbar, popup or shortcuts. It's remembered for the next video and follows changes you make in the site's own menu.
 * **Timeline** (Expanded layout): buffered ranges, click or drag to seek, **hover previews** and a time readout that toggles between elapsed and remaining. The tooltip says when the video will end at the current speed.
 * **A-B loop**, **snapshot** (saves the frame as PNG, with your picture filters), seek back/forward with a configurable step.
-* On **Netflix** and **YouTube**, seeking, play/pause and volume go through the site's own player API. Setting `currentTime` directly crashes Netflix's player.
+* On **Netflix** and **YouTube**, seeking and play/pause go through the site's own player API. Setting `currentTime` directly crashes Netflix's player.
+* **Volume goes through the site's own player** so its slider and saved level stay in step. It uses the player API on YouTube, Netflix, JW Player and Video.js, or the volume slider in the player's controls (Plyr, Shaka, Twitch and many custom players). If the site ignores it, QualityLock sets the video's volume directly.
 
 ### 🖥️ Viewing
 
@@ -59,9 +60,9 @@ QualityLock does two jobs:
 
 ### 🖱️ Mouse
 
-* **Wheel = volume** over the video: off, only in fullscreen (default), or always.
 * **Hold right button + wheel = volume** anywhere over the video, and no context menu pops up afterwards.
-* **Mouse back/forward side buttons seek** −/+ the seek step inside the video instead of leaving the page. Choose *over the video* (default) or *anywhere on the page*.
+* **Wheel alone = volume** is opt-in: off (default), only in fullscreen, or always. When it's off, the wheel scrolls the page as usual.
+* **Mouse buttons seek** −/+ the seek step inside the video instead of leaving the page. By default, the back/forward side buttons do this. To change which buttons, click *Seek back* or *Seek forward* in the popup and press any mouse button (a side button, the wheel click or an extra button). Choose *over the video* (default) or *anywhere on the page*.
 * Scrolling up on a muted video unmutes it at its previous level.
 
 ### 🔒 Quality lock (the original feature)
@@ -102,9 +103,9 @@ Chrome lets an extension suggest four keys; the rest can be bound at `chrome://e
 | <kbd>Esc</kbd>                                            | Leave window fill / lights off                                                                                                           |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>              | Stats for nerds                                                                                                                          |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd>              | Resolution badge                                                                                                                         |
-| Wheel over video                                          | Volume (in fullscreen by default)                                                                                                        |
 | Right button + wheel                                      | Volume                                                                                                                                   |
-| Mouse back / forward                                      | Seek −/+ seek step                                                                                                                      |
+| Wheel over video                                          | Volume, if turned on (off by default)                                                                                                    |
+| Mouse back / forward (or the buttons you pick)            | Seek −/+ seek step                                                                                                                      |
 
 ---
 

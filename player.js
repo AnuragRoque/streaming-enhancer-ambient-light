@@ -58,7 +58,7 @@
     picture: { brightness: 100, contrast: 100, saturation: 100, gamma: 100, warmth: 0, sharpness: 0, grayscale: 0 },
     backdrop: { mode: 'off', intensity: 80, blur: 50 },
     playback: { speed: 1, rememberSpeed: true, speedStep: 0.25, seekStep: 10 },
-    mouse: { wheel: 'fullscreen', rightWheel: true, sideButtons: 'video', volumeStep: 5, hideCursor: true }
+    mouse: { wheelVolume: 'off', rightWheel: true, sideButtons: 'video', seekBackButton: 3, seekFwdButton: 4, volumeStep: 5, hideCursor: true }
   };
   var PICTURE_DEFAULT = DEF.picture;
 
@@ -94,7 +94,7 @@
   }
   refreshCfg();
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.2.1';
   var retired = false; // the extension was updated or removed under this page
   function on() { return !retired && cfg.enabled && cfg.videoController.enabled; }
 
@@ -1134,47 +1134,157 @@
     if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(noop); } else v.pause();
   }
 
-  function isMuted(v) {
+  // ==================================================================
+  // Volume: through the site's own player first (its API, or the volume
+  // slider in its controls), so the player's slider, mute button and saved
+  // level follow. The <video> element itself is the fallback.
+  // ==================================================================
+  function jwPlayer(v) {
+    var c = v.closest && v.closest('.jwplayer');
+    if (!c || !c.id || typeof G.jwplayer !== 'function') return null;
+    try { var p = G.jwplayer(c.id); return p && typeof p.setVolume === 'function' && typeof p.getVolume() === 'number' ? p : null; } catch (e) { return null; }
+  }
+  function vjsPlayer(v) {
+    var c = v.closest && v.closest('.video-js');
+    if (!c) return null;
+    var p = c.player;
+    if (!p && G.videojs && typeof G.videojs.getPlayer === 'function') { try { p = G.videojs.getPlayer(c); } catch (e) { p = null; } }
+    return p && typeof p.volume === 'function' && typeof p.muted === 'function' ? p : null;
+  }
+
+  // A volume <input type=range> in the player's own controls (Plyr, Shaka UI,
+  // Twitch and many custom players). A slider the site turns out to ignore is
+  // skipped from then on.
+  var VOL_LABEL = /volume|lautst|volumen|громк|音量/i;
+  var volSl = { v: null, el: null, at: 0, bad: null };
+  function volSlider(v) {
+    if (volSl.v === v && now() - volSl.at < 5000 && (!volSl.el || volSl.el.isConnected)) return volSl.el;
+    var found = null;
+    for (var node = v.parentElement, i = 0; node && i < 6 && !found; node = node.parentElement, i++) {
+      if (node === doc.documentElement) break;
+      var list = node.querySelectorAll('input[type="range"]');
+      for (var j = 0; j < list.length && !found; j++) {
+        var el = list[j];
+        if (el === volSl.bad) continue;
+        var lab = [el.getAttribute('aria-label'), el.title, el.name, el.id, el.getAttribute('class'),
+          el.getAttribute('data-a-target'), el.getAttribute('data-testid'), el.getAttribute('data-plyr')].join(' ');
+        if (VOL_LABEL.test(lab)) found = el;
+      }
+    }
+    volSl.v = v; volSl.el = found; volSl.at = now();
+    return found;
+  }
+  function rangeOf(el) {
+    var min = el.min !== '' && isFinite(+el.min) ? +el.min : 0;
+    var max = el.max !== '' && isFinite(+el.max) ? +el.max : 100;
+    return [min, max > min ? max : min + 1];
+  }
+  var valueSetter = null;
+  function setRangeValue(el, x) {
+    // The native setter, so frameworks that track the value (React) see the change.
+    try {
+      valueSetter = valueSetter || Object.getOwnPropertyDescriptor(G.HTMLInputElement.prototype, 'value').set;
+      valueSetter.call(el, String(x));
+    } catch (e) { el.value = String(x); }
+    el.dispatchEvent(new G.Event('input', { bubbles: true }));
+    el.dispatchEvent(new G.Event('change', { bubbles: true }));
+  }
+
+  // { get: 0..1, muted, set(0..1), mute(bool) or null, slider } for the player around v.
+  function siteVolume(v) {
     var yt = ytPlayer(v);
-    if (yt && typeof yt.isMuted === 'function') { try { return !!yt.isMuted(); } catch (e) { /* ignore */ } }
+    if (yt) return {
+      get: function () { return yt.getVolume() / 100; },
+      muted: function () { return yt.isMuted(); },
+      set: function (x) { yt.setVolume(Math.round(x * 100)); if (x > 0 && yt.isMuted()) yt.unMute(); },
+      mute: function (m) { if (m) yt.mute(); else yt.unMute(); }
+    };
+    var nf = nfPlayer();
+    if (nf) return {
+      get: function () { return typeof nf.getVolume === 'function' ? +nf.getVolume() : v.volume; },
+      muted: function () { return typeof nf.isMuted === 'function' ? nf.isMuted() : v.muted; },
+      set: function (x) { nf.setVolume(x); if (x > 0 && nf.isMuted && nf.isMuted()) nf.setMuted(false); },
+      mute: function (m) { nf.setMuted(m); }
+    };
+    var jw = jwPlayer(v);
+    if (jw) return {
+      get: function () { return jw.getVolume() / 100; },
+      muted: function () { return jw.getMute(); },
+      set: function (x) { jw.setVolume(Math.round(x * 100)); if (x > 0 && jw.getMute()) jw.setMute(false); },
+      mute: function (m) { jw.setMute(m); }
+    };
+    var vj = vjsPlayer(v);
+    if (vj) return {
+      get: function () { return vj.volume(); },
+      muted: function () { return vj.muted(); },
+      set: function (x) { vj.volume(x); if (x > 0 && vj.muted()) vj.muted(false); },
+      mute: function (m) { vj.muted(m); }
+    };
+    var sl = volSlider(v);
+    if (sl) return {
+      get: function () { var r = rangeOf(sl); return (+sl.value - r[0]) / (r[1] - r[0]); },
+      muted: function () { return v.muted; },
+      set: function (x) { var r = rangeOf(sl); setRangeValue(sl, Math.round((r[0] + x * (r[1] - r[0])) * 1e4) / 1e4); },
+      mute: null,
+      slider: sl
+    };
+    return null;
+  }
+
+  // The site's slider counts only if the video's volume followed it. If not,
+  // the element is set directly and that slider is dropped. One check covers
+  // a burst of wheel steps.
+  var slWatch = null;
+  function checkSlider(v, sl, vol) {
+    var w = slWatch;
+    if (!w || w.v !== v) {
+      if (w) { G.clearTimeout(w.timer); w.v.removeEventListener('volumechange', w.hit); }
+      w = slWatch = { v: v, moved: false, timer: 0 };
+      w.hit = function () { w.moved = true; };
+      v.addEventListener('volumechange', w.hit);
+    }
+    w.sl = sl; w.vol = vol;
+    G.clearTimeout(w.timer);
+    w.timer = G.setTimeout(function () {
+      v.removeEventListener('volumechange', w.hit);
+      slWatch = null;
+      if (!w.moved && Math.abs(v.volume - w.vol) > 0.02) { volSl.bad = w.sl; volSl.at = 0; v.volume = w.vol; }
+      if (w.vol > 0 && v.muted) v.muted = false;
+    }, 250);
+  }
+
+  function isMuted(v) {
+    var api = siteVolume(v);
+    if (api) { try { return !!api.muted(); } catch (e) { /* fall back */ } }
     return v.muted;
+  }
+  // YouTube's loudness normalisation keeps video.volume below its own slider,
+  // so the player's value is read where there is one.
+  function getVolume(v) {
+    var api = siteVolume(v);
+    if (api) { try { var x = +api.get(); if (isFinite(x)) return clamp(x, 0, 1); } catch (e) { /* fall back */ } }
+    return v.volume;
   }
   function setVolume(v, vol, quiet) {
     if (!v) return;
     vol = clamp(vol, 0, 1);
+    var api = siteVolume(v);
     var done = false;
-    var yt = ytPlayer(v);
-    if (yt) {
-      try { yt.setVolume(Math.round(vol * 100)); if (vol > 0 && yt.isMuted()) yt.unMute(); done = true; } catch (e) { done = false; }
-    }
-    var nf = !done && nfPlayer();
-    if (nf) {
-      try { nf.setVolume(vol); if (vol > 0 && nf.isMuted && nf.isMuted()) nf.setMuted(false); done = true; } catch (e) { done = false; }
-    }
+    if (api) { try { api.set(vol); done = true; } catch (e) { done = false; } }
     if (!done) { v.volume = vol; if (vol > 0 && v.muted) v.muted = false; }
+    else if (api.slider) checkSlider(v, api.slider, vol);
     if (!quiet) osd('Volume ' + Math.round(vol * 100) + '%', vol === 0 ? 'Muted' : '', vol === 0 ? 'mute' : 'volume', vol);
     refreshUi();
   }
   function toggleMute(v) {
     if (!v) return;
     var muted = isMuted(v);
-    var yt = ytPlayer(v);
+    var api = siteVolume(v);
     var done = false;
-    if (yt) { try { if (muted) yt.unMute(); else yt.mute(); done = true; } catch (e) { done = false; } }
-    var nf = !done && nfPlayer();
-    if (nf) { try { nf.setMuted(!muted); done = true; } catch (e) { done = false; } }
+    if (api && api.mute) { try { api.mute(!muted); done = true; } catch (e) { done = false; } }
     if (!done) v.muted = !muted;
     osd(muted ? 'Sound on' : 'Muted', muted ? 'Volume ' + Math.round(getVolume(v) * 100) + '%' : '', muted ? 'volume' : 'mute');
     refreshUi();
-  }
-  // YouTube's loudness normalisation keeps video.volume below its own slider,
-  // so read the player's value where there is one.
-  function getVolume(v) {
-    var yt = ytPlayer(v);
-    if (yt && typeof yt.getVolume === 'function') { try { return clamp(yt.getVolume() / 100, 0, 1); } catch (e) { /* ignore */ } }
-    var nf = nfPlayer();
-    if (nf && typeof nf.getVolume === 'function') { try { return clamp(+nf.getVolume(), 0, 1); } catch (e) { /* ignore */ } }
-    return v.volume;
   }
   // Scrolling up on a muted video unmutes it at its old level; scrolling down
   // keeps it muted.
@@ -1594,7 +1704,7 @@
   // ==================================================================
   var OSD_CSS = [
     ':host{all:initial}',
-    '.o{display:flex;align-items:center;gap:11px;min-width:190px;max-width:min(520px,86vw);padding:10px 16px 10px 12px;border-radius:14px;',
+    '.o{display:flex;align-items:center;gap:11px;box-sizing:border-box;width:max-content;min-width:230px;max-width:min(520px,86vw);padding:10px 16px 10px 12px;border-radius:14px;',
     'background:rgba(14,16,20,.86);color:#fff;box-shadow:0 12px 34px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset;',
     'backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);',
     'font:600 13.5px/1.25 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;transform:translateX(-50%) translateY(-6px);opacity:0;',
@@ -1602,7 +1712,7 @@
     '.o.show{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0);transition:opacity .18s ease,transform .18s ease,visibility 0s}',
     '.ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent,#f2a7b5) 20%,transparent);color:var(--accent,#f2a7b5);flex:none}',
     '.ic svg{width:19px;height:19px}',
-    '.tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:170px}',
+    '.tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}',
     '.t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}',
     '.d{font-weight:500;font-size:11.5px;color:rgba(255,255,255,.66);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.d:empty{display:none}',
@@ -1778,7 +1888,7 @@
   var tb = {
     host: null, root: null, w: null, bar: null, row: null, tl: null, btn: {}, panel: null, panelId: '', panelApi: null,
     tip: null, tipTimer: 0, tipFor: null, enabled: cfg.toolbar.show !== 'manual', shown: false, force: 0,
-    drag: null, hoverTb: false, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false,
+    drag: null, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false,
     pos: { fx: 0.5, fy: 0.035 }
   };
   try {
@@ -2113,8 +2223,6 @@
       // Keep our clicks, keys and wheel turns away from the player under us.
       ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'wheel', 'contextmenu', 'touchstart', 'touchend', 'keydown', 'keyup', 'keypress']
         .forEach(function (t) { tb.host.addEventListener(t, function (e) { e.stopPropagation(); }); });
-      tb.host.addEventListener('pointerenter', function () { tb.hoverTb = true; });
-      tb.host.addEventListener('pointerleave', function () { tb.hoverTb = false; });
       tb.root.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closePanel(); } });
     }
     tb.sig = tbSig();
@@ -2307,12 +2415,15 @@
       grip.removeEventListener('pointermove', move);
       grip.removeEventListener('pointerup', up);
       grip.removeEventListener('pointercancel', up);
+      grip.removeEventListener('lostpointercapture', up);
       try { G.localStorage.setItem('__qlock_tbpos', JSON.stringify(tb.pos)); } catch (x) { /* ignore */ }
       placePanel();
     }
     grip.addEventListener('pointermove', move);
     grip.addEventListener('pointerup', up);
     grip.addEventListener('pointercancel', up);
+    // The grip can be rebuilt mid-drag; without this the toolbar stayed pinned.
+    grip.addEventListener('lostpointercapture', up);
   }
 
   function visibleBox(v) {
@@ -2358,7 +2469,7 @@
     if (!quiet) osd(onOff ? 'Toolbar on' : 'Toolbar hidden', onOff ? (k ? k + ' hides it' : '') : (k ? k + ' brings it back' : 'Bring it back from the QualityLock popup'), 'layout');
   }
 
-  function idleMs() { return Math.max(1, cfg.toolbar.autoHide || 0) * 1000; }
+  function idleMs() { return (cfg.toolbar.autoHide > 0 ? cfg.toolbar.autoHide : 3) * 1000; }
 
   var idleAttr = false;
   function setIdleCursor(idle) {
@@ -2380,15 +2491,20 @@
     var box = playerBox(v);
     var fsLike = box.fs;
     var t = now();
-    var autoHide = cfg.toolbar.autoHide > 0;
-    var recent = !autoHide || t - ptr.at < idleMs();
+    var idle = t - ptr.at;
     var overVideo = ptr.inWin && pointIn(box.rect, ptr.x, ptr.y);
-    var pinned = !!tb.panelId || !!tb.drag || tb.hoverTb || t < tb.force;
+    // Read from the pointer position, not enter/leave events: those go missing
+    // when the toolbar is re-mounted under a still pointer (fullscreen, window
+    // fill), which left it stuck on screen.
+    var overTb = tb.shown && ptr.inWin && !!tb.bar && pointIn(tb.bar.getBoundingClientRect(), ptr.x, ptr.y);
+    var pinned = !!tb.panelId || !!tb.drag || t < tb.force;
+    // Auto-hide: shown while the mouse moves over the video, gone once it rests.
+    // Resting on the toolbar itself gets a few seconds more to read tooltips.
     var want = tb.enabled && bigEnough(v, box) &&
-      (pinned || (recent && (cfg.toolbar.show === 'always' || overVideo)));
+      (cfg.toolbar.show === 'always' || pinned || (overTb ? idle < idleMs() + 5000 : overVideo && idle < idleMs()));
 
     // Idle cursor in fullscreen / window fill.
-    setIdleCursor(cfg.mouse.hideCursor && fsLike && overVideo && !pinned && t - ptr.at > Math.max(2000, autoHide ? idleMs() : 2500));
+    setIdleCursor(cfg.mouse.hideCursor && fsLike && overVideo && !pinned && !overTb && idle > Math.max(2000, idleMs()));
 
     if (!want && !tb.host) return;
     if (!tb.host || tb.sig !== tbSig()) tbBuild();
@@ -2442,6 +2558,9 @@
   // Pointer tracking (cheap; the work happens in one animation frame).
   var uiRaf = 0;
   function onPointer(e) {
+    // Only real movement counts: page scripts and hover updates can send
+    // pointermove without the pointer moving, which kept the toolbar up.
+    if (!e.isTrusted || (e.type === 'pointermove' && ptr.inWin && e.clientX === ptr.x && e.clientY === ptr.y)) return;
     ptr.x = e.clientX; ptr.y = e.clientY; ptr.at = now(); ptr.inWin = true;
     if (!uiRaf) uiRaf = G.requestAnimationFrame(function () { uiRaf = 0; tbUpdate(false); });
   }
@@ -2457,7 +2576,7 @@
 
   G.setInterval(function () {
     if (!on()) { if (tb.host || idleAttr) tbUpdate(true); return; }
-    if (tb.shown || tb.panelId || now() - ptr.at < idleMs() + 3000) tbUpdate(false);
+    if (tb.shown || tb.panelId || cfg.toolbar.show === 'always' || now() - ptr.at < idleMs() + 8000) tbUpdate(false);
     // Remember frames for timeline previews while the expanded layout is in use.
     var v = tb.enabled && cfg.toolbar.layout === 'expanded' ? targetVideo() : null;
     if (v) thumbs.sample(v);
@@ -2474,7 +2593,7 @@
     var v = targetVideo();
     if (!v || !overVideoAt(v, e.clientX, e.clientY)) return;
     var fsLike = !!doc.fullscreenElement || winfs.on;
-    var use = (mouse.right && cfg.mouse.rightWheel) || cfg.mouse.wheel === 'always' || (cfg.mouse.wheel === 'fullscreen' && fsLike);
+    var use = (mouse.right && cfg.mouse.rightWheel) || cfg.mouse.wheelVolume === 'always' || (cfg.mouse.wheelVolume === 'fullscreen' && fsLike);
     if (!use) return;
     e.preventDefault();
     e.stopPropagation();
@@ -2490,6 +2609,13 @@
     changeVolume(v, dir * cfg.mouse.volumeStep / 100);
   }, { capture: true, passive: false });
 
+  // Which way a mouse button seeks: -1 back, 1 forward, 0 not bound. The left
+  // and right buttons are never taken over.
+  function seekDir(b) {
+    if (b === 0 || b === 2) return 0;
+    return b === cfg.mouse.seekBackButton ? -1 : b === cfg.mouse.seekFwdButton ? 1 : 0;
+  }
+
   function sideButtonOk(e) {
     if (!on() || cfg.mouse.sideButtons === 'off' || inToolbar(e)) return null;
     var v = targetVideo();
@@ -2504,22 +2630,24 @@
       var v = on() && cfg.mouse.rightWheel ? targetVideo() : null;
       mouse.right = !!(v && overVideoAt(v, e.clientX, e.clientY));
       mouse.rightUsed = false;
-    } else if (e.button === 3 || e.button === 4) {
-      var sv = sideButtonOk(e);
+    } else {
+      var dir = seekDir(e.button);
+      var sv = dir && sideButtonOk(e);
       if (!sv) return;
-      e.preventDefault();
+      e.preventDefault(); // also stops middle-click autoscroll
       e.stopPropagation();
-      seekBy(sv, (e.button === 3 ? -1 : 1) * cfg.playback.seekStep);
+      seekBy(sv, dir * cfg.playback.seekStep);
     }
   }, true);
-  // Back / forward navigation fires on the release; cancel it there too.
+  // Back / forward navigation (and middle-click link opening) fires on the
+  // release; cancel it there too.
   ['mouseup', 'pointerup', 'auxclick'].forEach(function (t) {
     G.addEventListener(t, function (e) {
       if (e.button === 2 && t === 'mouseup') {
         mouse.right = false;
         if (mouse.rightUsed) G.setTimeout(function () { mouse.rightUsed = false; }, 400);
       }
-      if ((e.button === 3 || e.button === 4) && sideButtonOk(e)) { e.preventDefault(); e.stopPropagation(); }
+      if (seekDir(e.button) && sideButtonOk(e)) { e.preventDefault(); e.stopPropagation(); }
     }, true);
   });
   G.addEventListener('contextmenu', function (e) {
@@ -2659,7 +2787,7 @@
       loop: { a: loop.a, b: loop.b }
     };
     if (v) {
-      s.playback = { rate: v.playbackRate, paused: v.paused, volume: v.volume, muted: isMuted(v),
+      s.playback = { rate: v.playbackRate, paused: v.paused, volume: getVolume(v), muted: isMuted(v),
         time: v.currentTime, duration: isFinite(v.duration) ? v.duration : null };
     }
     return s;

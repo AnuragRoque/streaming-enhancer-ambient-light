@@ -221,27 +221,36 @@
 
       <div class="card">
         <div class="card-head"><h2>Mouse</h2></div>
-        <div class="field">
-          <span>Wheel over video = volume</span>
-          <select id="mouseWheel"><option value="off">Off</option><option value="fullscreen">In fullscreen</option><option value="always">Always</option></select>
-        </div>
         <label class="toggle">
           <span><strong>Right button + wheel = volume</strong><small>Hold right-click and scroll over the video. No menu pops up.</small></span>
           <input type="checkbox" id="rightWheel"><span class="mini-switch"></span>
         </label>
         <div class="field">
-          <span>Back / forward buttons seek</span>
-          <select id="sideButtons"><option value="off">Off</option><option value="video">Over the video</option><option value="page">Anywhere on the page</option></select>
+          <span>Wheel alone = volume<small>Without holding the right button</small></span>
+          <select id="mouseWheel"><option value="off">Off</option><option value="fullscreen">In fullscreen</option><option value="always">Always</option></select>
         </div>
         <div class="field">
           <span>Volume step</span>
           <select id="volumeStep"><option value="2">2%</option><option value="5">5%</option><option value="10">10%</option></select>
         </div>
+        <div class="field">
+          <span>Mouse buttons seek</span>
+          <select id="sideButtons"><option value="off">Off</option><option value="video">Over the video</option><option value="page">Anywhere on the page</option></select>
+        </div>
+        <div class="field">
+          <span>Seek back</span>
+          <button type="button" class="bind" id="bindBack" data-key="seekBackButton" aria-describedby="bindNote"></button>
+        </div>
+        <div class="field">
+          <span>Seek forward</span>
+          <button type="button" class="bind" id="bindFwd" data-key="seekFwdButton" aria-describedby="bindNote"></button>
+        </div>
+        <p class="note" id="bindNote">Click a box, then press the mouse button you want for it: a side button, the wheel click or an extra button. Esc cancels, Delete clears.</p>
         <label class="toggle">
           <span><strong>Hide cursor in fullscreen</strong><small>When the mouse rests over the video.</small></span>
           <input type="checkbox" id="hideCursor"><span class="mini-switch"></span>
         </label>
-        <p class="note">Side buttons seek inside the video instead of going to the previous page. Some mouse software sends them as keys instead; then the browser handles them.</p>
+        <p class="note">The seek buttons work inside the video instead of going to the previous page. Some mouse software sends side buttons as keys; then the browser handles them and they can’t be picked here.</p>
       </div>
     </section>
 
@@ -290,8 +299,8 @@
         <div class="field-col">
           <span>Show</span>
           <div class="seg" id="tbShow" role="radiogroup" aria-label="When to show the toolbar">
-            <button type="button" data-v="hover" data-tip="When the mouse moves over the video">On hover</button>
-            <button type="button" data-v="always" data-tip="Whenever the mouse moves">Always</button>
+            <button type="button" data-v="hover" data-tip="Shows when the mouse moves over the video, hides when it stops">Auto-hide</button>
+            <button type="button" data-v="always" data-tip="Stays on screen while a video is showing">Always visible</button>
             <button type="button" data-v="manual" data-tip="Only after the shortcut or the popup button">Shortcut only</button>
           </div>
         </div>
@@ -318,9 +327,9 @@
             <label>Secondary <input type="color" id="accentS"></label>
           </div>
         </div>
-        <div class="field">
-          <span>Auto-hide when idle</span>
-          <select id="tbAutoHide"><option value="0">Never</option><option value="2">After 2 s</option><option value="3">After 3 s</option><option value="5">After 5 s</option><option value="8">After 8 s</option></select>
+        <div class="field" id="tbAutoHideRow">
+          <span>Hide when the mouse stops</span>
+          <select id="tbAutoHide"><option value="1">After 1 s</option><option value="2">After 2 s</option><option value="3">After 3 s</option><option value="5">After 5 s</option><option value="8">After 8 s</option></select>
         </div>
       </div>
 

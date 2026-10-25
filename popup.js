@@ -236,9 +236,10 @@
     $('speedStep').value = String(pb.speedStep);
     $('seekStep').value = String(pb.seekStep);
     var m = settings.mouse;
-    $('mouseWheel').value = m.wheel;
+    $('mouseWheel').value = m.wheelVolume;
     $('rightWheel').checked = !!m.rightWheel;
     $('sideButtons').value = m.sideButtons;
+    renderBinds();
     $('volumeStep').value = String(m.volumeStep);
     $('hideCursor').checked = !!m.hideCursor;
 
@@ -252,7 +253,8 @@
       t.setAttribute('aria-checked', on ? 'true' : 'false');
       t.setAttribute('role', 'radio');
     });
-    $('tbAutoHide').value = String(tb.autoHide);
+    $('tbAutoHide').value = String(tb.autoHide > 0 ? tb.autoHide : 3);
+    $('tbAutoHideRow').hidden = tb.show === 'always';
     renderAccents();
     var sig = JSON.stringify(tb.buttons);
     if (dragItem === null && sig !== buttonsSig) renderButtonList();
@@ -680,11 +682,61 @@
   bindToggle('rememberSpeed', null, function (v) { settings.playback.rememberSpeed = v; });
   $('speedStep').addEventListener('change', function (e) { settings.playback.speedStep = +e.target.value; save(); });
   $('seekStep').addEventListener('change', function (e) { settings.playback.seekStep = +e.target.value; save(); });
-  $('mouseWheel').addEventListener('change', function (e) { settings.mouse.wheel = e.target.value; save(); });
+  $('mouseWheel').addEventListener('change', function (e) { settings.mouse.wheelVolume = e.target.value; save(); });
   bindToggle('rightWheel', null, function (v) { settings.mouse.rightWheel = v; });
   $('sideButtons').addEventListener('change', function (e) { settings.mouse.sideButtons = e.target.value; save(); });
   $('volumeStep').addEventListener('change', function (e) { settings.mouse.volumeStep = +e.target.value; save(); });
   bindToggle('hideCursor', null, function (v) { settings.mouse.hideCursor = v; });
+
+  // Seek buttons: click a box, then press the mouse button to use for it.
+  var BUTTON_NAMES = { 1: 'Wheel click', 3: 'Back side button', 4: 'Forward side button' };
+  function buttonName(n) { return n < 0 ? 'Not set' : BUTTON_NAMES[n] || 'Mouse button ' + (n + 1); }
+  var binding = null; // the box waiting for a press
+  var boundAt = 0;
+  function renderBinds() {
+    document.querySelectorAll('.bind').forEach(function (b) {
+      var n = settings.mouse[b.getAttribute('data-key')];
+      var wait = binding === b;
+      b.classList.toggle('listening', wait);
+      b.classList.toggle('unset', !wait && n < 0);
+      b.setAttribute('aria-pressed', wait ? 'true' : 'false');
+      b.textContent = wait ? 'Press a mouse button…' : buttonName(n);
+    });
+  }
+  function stopBinding() { binding = null; renderBinds(); }
+  function assignButton(key, n) {
+    var m = settings.mouse;
+    var other = key === 'seekBackButton' ? 'seekFwdButton' : 'seekBackButton';
+    if (n >= 0 && m[other] === n) m[other] = m[key]; // taking the other direction's button swaps the two
+    m[key] = n;
+    binding = null;
+    boundAt = Date.now();
+    save(); renderSettings();
+  }
+  document.querySelectorAll('.bind').forEach(function (b) {
+    b.addEventListener('click', function () { binding = binding === b ? null : b; renderBinds(); });
+  });
+  // The press that sets the button. Capture phase, so nothing else reacts to it.
+  document.addEventListener('mousedown', function (e) {
+    if (!binding) return;
+    if (e.button === 0) { if (!e.target.closest || !e.target.closest('.bind')) stopBinding(); return; }
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.button === 2) { binding.textContent = 'Right button is for volume'; return; }
+    assignButton(binding.getAttribute('data-key'), e.button);
+  }, true);
+  // Keep that press's own action (back / forward, autoscroll, menu) out of the popup.
+  ['mouseup', 'auxclick', 'contextmenu'].forEach(function (t) {
+    document.addEventListener(t, function (e) {
+      if (e.button !== 0 && (binding || Date.now() - boundAt < 600)) e.preventDefault();
+    }, true);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!binding) return;
+    if (e.key === 'Escape') { e.preventDefault(); stopBinding(); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); assignButton(binding.getAttribute('data-key'), -1); }
+    else if (e.key === 'Tab') stopBinding();
+  }, true);
 
   // ---------------------------------------------------------------- QUALITY tab
   $('nerds').addEventListener('change', function (e) { settings.nerds = e.target.checked; save(); });
