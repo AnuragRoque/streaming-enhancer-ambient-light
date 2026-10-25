@@ -186,6 +186,14 @@
       b.setAttribute('role', 'radio');
     });
   }
+  function setChips(id, v) {
+    $(id).querySelectorAll('.chip').forEach(function (c) {
+      var on = c.getAttribute('data-v') === String(v);
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-checked', on ? 'true' : 'false');
+      c.setAttribute('role', 'radio');
+    });
+  }
   function onSeg(id, fn) {
     $(id).querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () { fn(b.getAttribute('data-v')); });
@@ -216,8 +224,17 @@
     setSeg('bdMode', b.mode);
     setRange($('bdIntensity'), b.intensity); $('bdIntensityVal').textContent = b.intensity + '%';
     setRange($('bdBlur'), b.blur); $('bdBlurVal').textContent = b.blur + '%';
-    $('qaBackdropLabel').textContent = b.mode === 'blur' ? 'Blur fill' : b.mode === 'ambient' ? 'Ambient' : 'Backdrop';
+    $('qaBackdropLabel').textContent = { ambient: 'Ambient', blur: 'Blur fill', rgb: 'RGB light', image: 'Image' }[b.mode] || 'Backdrop';
     $('qaBackdrop').classList.toggle('on', b.mode !== 'off');
+    $('bdRgb').hidden = b.mode !== 'rgb';
+    $('bdImage').hidden = b.mode !== 'image';
+    setChips('rgbEffect', b.rgbEffect);
+    $('rgbColorRow').hidden = b.rgbEffect !== 'breathe' && b.rgbEffect !== 'static';
+    $('rgbSpeedRow').hidden = b.rgbEffect === 'static';
+    if (document.activeElement !== $('rgbColor')) $('rgbColor').value = b.rgbColor;
+    document.querySelectorAll('#rgbSwatches .swatch').forEach(function (s) { s.classList.toggle('on', s.getAttribute('data-c') === String(b.rgbColor).toLowerCase()); });
+    setRange($('rgbSpeed'), b.rgbSpeed); $('rgbSpeedVal').textContent = b.rgbSpeed + '%';
+    renderImage(b.imageAt);
 
     // picture
     var p = settings.picture;
@@ -236,9 +253,10 @@
     $('speedStep').value = String(pb.speedStep);
     $('seekStep').value = String(pb.seekStep);
     var m = settings.mouse;
-    $('mouseWheel').value = m.wheel;
+    $('mouseWheel').value = m.wheelVolume;
     $('rightWheel').checked = !!m.rightWheel;
     $('sideButtons').value = m.sideButtons;
+    renderBinds();
     $('volumeStep').value = String(m.volumeStep);
     $('hideCursor').checked = !!m.hideCursor;
 
@@ -252,7 +270,8 @@
       t.setAttribute('aria-checked', on ? 'true' : 'false');
       t.setAttribute('role', 'radio');
     });
-    $('tbAutoHide').value = String(tb.autoHide);
+    $('tbAutoHide').value = String(tb.autoHide > 0 ? tb.autoHide : 3);
+    $('tbAutoHideRow').hidden = tb.show === 'always';
     renderAccents();
     var sig = JSON.stringify(tb.buttons);
     if (dragItem === null && sig !== buttonsSig) renderButtonList();
@@ -487,7 +506,7 @@
     var bdState = $('bdState');
     if (b.blocked === 'drm') {
       bdNote.hidden = false;
-      bdNote.textContent = 'This video is DRM-protected (Netflix, Prime and similar). Browsers don’t let extensions read its frames, so the backdrop can’t be drawn here. It works on YouTube and most other sites.';
+      bdNote.textContent = 'This video is DRM-protected (Netflix, Prime and similar). Browsers don’t let extensions read its frames, so ambient light and blur fill can’t be drawn here. RGB light and Image work everywhere.';
     } else if (b.blocked === 'bare-fullscreen') {
       bdNote.hidden = false;
       bdNote.textContent = 'The bare video is fullscreen, which hides everything behind it. Use the toolbar’s fullscreen button instead.';
@@ -495,7 +514,8 @@
     if (b.mode && b.mode !== 'off') {
       bdState.hidden = false;
       bdState.className = 'pill' + (b.blocked ? ' bad' : ' accent');
-      bdState.textContent = b.blocked ? 'Unavailable' : b.drawing && b.visible ? 'Filling bars' : b.drawing ? 'No bars now' : 'Waiting';
+      bdState.textContent = b.blocked ? 'Unavailable' : b.mode === 'image' && settings && !settings.backdrop.imageAt ? 'No picture'
+        : b.drawing && b.visible ? 'Filling bars' : b.drawing ? 'No bars now' : 'Waiting';
     } else bdState.hidden = true;
 
     // Playback tab
@@ -537,7 +557,7 @@
   $('toggleHudBtn').addEventListener('click', function () { act('toggleToolbar', { keys: keys }); });
   $('qaFill').addEventListener('click', function () { act('toggleFill'); });
   $('qaBackdrop').addEventListener('click', function () {
-    var order = ['off', 'ambient', 'blur'];
+    var order = ['off', 'ambient', 'blur', 'rgb'].concat(settings.backdrop.imageAt ? ['image'] : []);
     settings.backdrop.mode = order[(order.indexOf(settings.backdrop.mode) + 1) % order.length];
     save(); renderSettings();
   });
@@ -603,7 +623,7 @@
   wireSlider('popSyRange', 'popSyVal', 'popSyMinus', 'popSyPlus', 5, 'setStretchY', 'scaleY');
 
   onSeg('bdMode', function (m) { settings.backdrop.mode = m; save(); renderSettings(); setTimeout(poll, 200); });
-  [['bdIntensity', 'intensity', 'bdIntensityVal'], ['bdBlur', 'blur', 'bdBlurVal']].forEach(function (r) {
+  [['bdIntensity', 'intensity', 'bdIntensityVal'], ['bdBlur', 'blur', 'bdBlurVal'], ['rgbSpeed', 'rgbSpeed', 'rgbSpeedVal']].forEach(function (r) {
     var input = $(r[0]);
     input.addEventListener('input', function () {
       rangeFill(input);
@@ -614,6 +634,93 @@
     });
     input.addEventListener('change', function () { settings.backdrop[r[1]] = +input.value; save(); });
   });
+  // RGB light
+  $('rgbEffect').querySelectorAll('.chip').forEach(function (c) {
+    c.addEventListener('click', function () { settings.backdrop.rgbEffect = c.getAttribute('data-v'); save(); renderSettings(); });
+  });
+  ['#ff2d55', '#ff9f0a', '#ffd60a', '#30d158', '#00c7ff', '#0a84ff', '#8a5cff', '#ff6ac1'].forEach(function (hex) {
+    var s = document.createElement('button');
+    s.type = 'button'; s.className = 'swatch'; s.style.background = hex;
+    s.setAttribute('data-c', hex); s.setAttribute('aria-label', 'Colour ' + hex);
+    s.addEventListener('click', function () { settings.backdrop.rgbColor = hex; save(); renderSettings(); });
+    $('rgbSwatches').insertBefore(s, $('rgbColor'));
+  });
+  $('rgbColor').addEventListener('input', function (e) {
+    var b = JSON.parse(JSON.stringify(settings.backdrop));
+    b.rgbColor = e.target.value;
+    act('backdropLive', { backdrop: b });
+  });
+  $('rgbColor').addEventListener('change', function (e) { settings.backdrop.rgbColor = e.target.value; save(); renderSettings(); });
+
+  // Backdrop picture: shrunk to 1920 px on the long side and kept as a JPEG in
+  // storage.local (a few hundred kB; storage.sync is far too small).
+  var shownImageAt = -1;
+  function renderImage(at) {
+    if (at === shownImageAt) return;
+    shownImageAt = at;
+    $('bdImgRemove').hidden = !at;
+    if (!at) { $('bdImgPreview').hidden = true; $('bdImgPreview').removeAttribute('src'); $('bdImgEmpty').hidden = false; $('bdImgEmpty').textContent = 'No picture yet'; return; }
+    chrome.storage.local.get(QLOCK_IMAGE_KEY, function (r) {
+      var im = r && r[QLOCK_IMAGE_KEY];
+      var ok = !!(im && im.at === at && typeof im.data === 'string');
+      if (ok) $('bdImgPreview').src = im.data;
+      $('bdImgPreview').hidden = !ok;
+      $('bdImgEmpty').hidden = ok;
+      if (!ok) $('bdImgEmpty').textContent = 'Picture missing';
+    });
+  }
+  var IMG_NOTE = $('bdImgNote').textContent;
+  function imageError(msg) {
+    var n = $('bdImgNote');
+    n.textContent = msg;
+    n.classList.add('warn');
+  }
+  // On macOS and Linux an extension popup closes as soon as the file chooser
+  // opens, so the picture is picked in a tab there.
+  var pickInTab = false;
+  var pickTab = location.hash === '#pick-image';
+  if (!pickTab && chrome.runtime.getPlatformInfo) chrome.runtime.getPlatformInfo(function (p) { pickInTab = !!p && p.os !== 'win'; });
+  $('bdImgPick').addEventListener('click', function (e) {
+    if (!pickInTab) return;
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL('popup.html#pick-image') });
+    window.close();
+  });
+  $('bdImgFile').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    createImageBitmap(f).then(function (bmp) {
+      var sc = Math.min(1, 1920 / Math.max(bmp.width, bmp.height));
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(bmp.width * sc));
+      c.height = Math.max(1, Math.round(bmp.height * sc));
+      var x = c.getContext('2d');
+      x.fillStyle = '#000';
+      x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(bmp, 0, 0, c.width, c.height);
+      var at = Date.now();
+      var o = {};
+      o[QLOCK_IMAGE_KEY] = { data: c.toDataURL('image/jpeg', 0.86), at: at };
+      chrome.storage.local.set(o, function () {
+        if (chrome.runtime.lastError) { imageError('Couldn’t save that picture: ' + chrome.runtime.lastError.message); return; }
+        settings.backdrop.imageAt = at;
+        settings.backdrop.mode = 'image';
+        save(); renderSettings();
+        var n = $('bdImgNote');
+        n.classList.remove('warn');
+        n.textContent = pickTab ? 'Saved. You can close this tab.' : IMG_NOTE;
+      });
+    }, function () { imageError('That file isn’t a picture this browser can open.'); });
+  });
+  $('bdImgRemove').addEventListener('click', function () {
+    chrome.storage.local.remove(QLOCK_IMAGE_KEY, function () {
+      settings.backdrop.imageAt = 0;
+      if (settings.backdrop.mode === 'image') settings.backdrop.mode = 'off';
+      save(); renderSettings();
+    });
+  });
+
   bindToggle('smartCrop', null, function (v) { settings.display.smartCrop = v; });
   bindToggle('rememberPerSite', null, function (v) { settings.display.rememberPerSite = v; });
 
@@ -680,11 +787,61 @@
   bindToggle('rememberSpeed', null, function (v) { settings.playback.rememberSpeed = v; });
   $('speedStep').addEventListener('change', function (e) { settings.playback.speedStep = +e.target.value; save(); });
   $('seekStep').addEventListener('change', function (e) { settings.playback.seekStep = +e.target.value; save(); });
-  $('mouseWheel').addEventListener('change', function (e) { settings.mouse.wheel = e.target.value; save(); });
+  $('mouseWheel').addEventListener('change', function (e) { settings.mouse.wheelVolume = e.target.value; save(); });
   bindToggle('rightWheel', null, function (v) { settings.mouse.rightWheel = v; });
   $('sideButtons').addEventListener('change', function (e) { settings.mouse.sideButtons = e.target.value; save(); });
   $('volumeStep').addEventListener('change', function (e) { settings.mouse.volumeStep = +e.target.value; save(); });
   bindToggle('hideCursor', null, function (v) { settings.mouse.hideCursor = v; });
+
+  // Seek buttons: click a box, then press the mouse button to use for it.
+  var BUTTON_NAMES = { 1: 'Wheel click', 3: 'Back side button', 4: 'Forward side button' };
+  function buttonName(n) { return n < 0 ? 'Not set' : BUTTON_NAMES[n] || 'Mouse button ' + (n + 1); }
+  var binding = null; // the box waiting for a press
+  var boundAt = 0;
+  function renderBinds() {
+    document.querySelectorAll('.bind').forEach(function (b) {
+      var n = settings.mouse[b.getAttribute('data-key')];
+      var wait = binding === b;
+      b.classList.toggle('listening', wait);
+      b.classList.toggle('unset', !wait && n < 0);
+      b.setAttribute('aria-pressed', wait ? 'true' : 'false');
+      b.textContent = wait ? 'Press a mouse button…' : buttonName(n);
+    });
+  }
+  function stopBinding() { binding = null; renderBinds(); }
+  function assignButton(key, n) {
+    var m = settings.mouse;
+    var other = key === 'seekBackButton' ? 'seekFwdButton' : 'seekBackButton';
+    if (n >= 0 && m[other] === n) m[other] = m[key]; // taking the other direction's button swaps the two
+    m[key] = n;
+    binding = null;
+    boundAt = Date.now();
+    save(); renderSettings();
+  }
+  document.querySelectorAll('.bind').forEach(function (b) {
+    b.addEventListener('click', function () { binding = binding === b ? null : b; renderBinds(); });
+  });
+  // The press that sets the button. Capture phase, so nothing else reacts to it.
+  document.addEventListener('mousedown', function (e) {
+    if (!binding) return;
+    if (e.button === 0) { if (!e.target.closest || !e.target.closest('.bind')) stopBinding(); return; }
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.button === 2) { binding.textContent = 'Right button is for volume'; return; }
+    assignButton(binding.getAttribute('data-key'), e.button);
+  }, true);
+  // Keep that press's own action (back / forward, autoscroll, menu) out of the popup.
+  ['mouseup', 'auxclick', 'contextmenu'].forEach(function (t) {
+    document.addEventListener(t, function (e) {
+      if (e.button !== 0 && (binding || Date.now() - boundAt < 600)) e.preventDefault();
+    }, true);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!binding) return;
+    if (e.key === 'Escape') { e.preventDefault(); stopBinding(); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); assignButton(binding.getAttribute('data-key'), -1); }
+    else if (e.key === 'Tab') stopBinding();
+  }, true);
 
   // ---------------------------------------------------------------- QUALITY tab
   $('nerds').addEventListener('change', function (e) { settings.nerds = e.target.checked; save(); });
@@ -834,6 +991,7 @@
     clearTimeout(resetArmed); resetArmed = 0;
     b.classList.remove('armed'); b.textContent = 'Reset all settings';
     settings = qlockMerge(QLOCK_DEFAULTS, null);
+    chrome.storage.local.remove(QLOCK_IMAGE_KEY);
     save(); renderSettings();
   });
 
@@ -841,7 +999,7 @@
   fillIcons(document);
   var savedTab = 'now';
   try { savedTab = localStorage.getItem('qlock:tab') || 'now'; } catch (e) { /* ignore */ }
-  selectTab(savedTab);
+  selectTab(pickTab ? 'display' : savedTab);
   $('versionNote').textContent = 'QualityLock ' + chrome.runtime.getManifest().version;
 
   // Toolbar and page changes (remembered speed, picture, backdrop) land in storage too.

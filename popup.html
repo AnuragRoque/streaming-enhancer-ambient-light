@@ -61,7 +61,7 @@
         <div class="qa-grid">
           <button type="button" class="qa" id="toggleHudBtn" data-tip="Show or hide the floating toolbar on the video"><i data-icon="toolbar"></i><span>Toolbar</span></button>
           <button type="button" class="qa" id="qaFill" data-tip="Zoom in until the black bars are gone"><i data-icon="fill"></i><span>Hide bars</span></button>
-          <button type="button" class="qa" id="qaBackdrop" data-tip="Cycle ambient light / blur fill for black bars"><i data-icon="backdrop"></i><span id="qaBackdropLabel">Ambient</span></button>
+          <button type="button" class="qa" id="qaBackdrop" data-tip="Cycle the black-bar backdrop: ambient, blur, RGB, image"><i data-icon="backdrop"></i><span id="qaBackdropLabel">Ambient</span></button>
           <button type="button" class="qa" id="qaPip" data-tip="Picture-in-Picture"><i data-icon="pip"></i><span>PiP</span></button>
           <button type="button" class="qa" id="qaWinfs" data-tip="Fill the browser window with the video"><i data-icon="winfs"></i><span>Window</span></button>
           <button type="button" class="qa" id="qaFs" data-tip="Fullscreen"><i data-icon="fullscreen"></i><span>Fullscreen</span></button>
@@ -156,8 +156,38 @@
         <p class="note">Fills the black bars without zooming or cropping the picture — including bars inside the video, set below under “Black bars inside the video”.</p>
         <div class="seg" id="bdMode" role="radiogroup" aria-label="Backdrop">
           <button type="button" data-v="off">Off</button>
-          <button type="button" data-v="ambient" data-tip="Bars glow with the colours at the picture’s edges">Ambient light</button>
-          <button type="button" data-v="blur" data-tip="Bars show a soft, blurred copy of the picture">Blur fill</button>
+          <button type="button" data-v="ambient" data-tip="Bars glow with the colours at the picture’s edges">Ambient</button>
+          <button type="button" data-v="blur" data-tip="Bars show a soft, blurred copy of the picture">Blur</button>
+          <button type="button" data-v="rgb" data-tip="LED-strip style light around the picture. Works on Netflix and Prime too">RGB</button>
+          <button type="button" data-v="image" data-tip="Your own picture behind the video">Image</button>
+        </div>
+        <div class="bd-sub" id="bdRgb" hidden>
+          <div class="chips four" id="rgbEffect" role="radiogroup" aria-label="RGB effect">
+            <button type="button" class="chip" data-v="wave" data-tip="Rainbow chasing around the picture">Wave</button>
+            <button type="button" class="chip" data-v="cycle" data-tip="The whole strip cycles through colours">Cycle</button>
+            <button type="button" class="chip" data-v="breathe" data-tip="Your colour, slowly breathing">Breathe</button>
+            <button type="button" class="chip" data-v="static" data-tip="Your colour, steady">Static</button>
+          </div>
+          <div class="field" id="rgbColorRow">
+            <span>Colour</span>
+            <span class="swatches" id="rgbSwatches"><input type="color" id="rgbColor" aria-label="Light colour"></span>
+          </div>
+          <div class="sl" id="rgbSpeedRow">
+            <label for="rgbSpeed">Speed</label><output id="rgbSpeedVal">40%</output>
+            <input type="range" id="rgbSpeed" min="1" max="100" step="1" value="40">
+          </div>
+        </div>
+        <div class="bd-sub" id="bdImage" hidden>
+          <div class="img-pick">
+            <img id="bdImgPreview" alt="" hidden>
+            <span class="img-empty" id="bdImgEmpty">No picture yet</span>
+            <div class="img-btns">
+              <label class="btn" for="bdImgFile" id="bdImgPick">Choose picture…</label>
+              <input type="file" id="bdImgFile" accept="image/*" hidden>
+              <button type="button" class="link" id="bdImgRemove" hidden>Remove</button>
+            </div>
+          </div>
+          <p class="note" id="bdImgNote">It fills the area behind the video, so the bars show its edges. The picture is drawn inside the web page, which means that site’s scripts can see it. Don’t use a private photo.</p>
         </div>
         <div class="sl">
           <label for="bdIntensity">Intensity</label><output id="bdIntensityVal">80%</output>
@@ -221,27 +251,36 @@
 
       <div class="card">
         <div class="card-head"><h2>Mouse</h2></div>
-        <div class="field">
-          <span>Wheel over video = volume</span>
-          <select id="mouseWheel"><option value="off">Off</option><option value="fullscreen">In fullscreen</option><option value="always">Always</option></select>
-        </div>
         <label class="toggle">
           <span><strong>Right button + wheel = volume</strong><small>Hold right-click and scroll over the video. No menu pops up.</small></span>
           <input type="checkbox" id="rightWheel"><span class="mini-switch"></span>
         </label>
         <div class="field">
-          <span>Back / forward buttons seek</span>
-          <select id="sideButtons"><option value="off">Off</option><option value="video">Over the video</option><option value="page">Anywhere on the page</option></select>
+          <span>Wheel alone = volume<small>Without holding the right button</small></span>
+          <select id="mouseWheel"><option value="off">Off</option><option value="fullscreen">In fullscreen</option><option value="always">Always</option></select>
         </div>
         <div class="field">
           <span>Volume step</span>
           <select id="volumeStep"><option value="2">2%</option><option value="5">5%</option><option value="10">10%</option></select>
         </div>
+        <div class="field">
+          <span>Mouse buttons seek</span>
+          <select id="sideButtons"><option value="off">Off</option><option value="video">Over the video</option><option value="page">Anywhere on the page</option></select>
+        </div>
+        <div class="field">
+          <span>Seek back</span>
+          <button type="button" class="bind" id="bindBack" data-key="seekBackButton" aria-describedby="bindNote"></button>
+        </div>
+        <div class="field">
+          <span>Seek forward</span>
+          <button type="button" class="bind" id="bindFwd" data-key="seekFwdButton" aria-describedby="bindNote"></button>
+        </div>
+        <p class="note" id="bindNote">Click a box, then press the mouse button you want for it: a side button, the wheel click or an extra button. Esc cancels, Delete clears.</p>
         <label class="toggle">
           <span><strong>Hide cursor in fullscreen</strong><small>When the mouse rests over the video.</small></span>
           <input type="checkbox" id="hideCursor"><span class="mini-switch"></span>
         </label>
-        <p class="note">Side buttons seek inside the video instead of going to the previous page. Some mouse software sends them as keys instead; then the browser handles them.</p>
+        <p class="note">The seek buttons work inside the video instead of going to the previous page. Some mouse software sends side buttons as keys; then the browser handles them and they can’t be picked here.</p>
       </div>
     </section>
 
@@ -290,8 +329,8 @@
         <div class="field-col">
           <span>Show</span>
           <div class="seg" id="tbShow" role="radiogroup" aria-label="When to show the toolbar">
-            <button type="button" data-v="hover" data-tip="When the mouse moves over the video">On hover</button>
-            <button type="button" data-v="always" data-tip="Whenever the mouse moves">Always</button>
+            <button type="button" data-v="hover" data-tip="Shows when the mouse moves over the video, hides when it stops">Auto-hide</button>
+            <button type="button" data-v="always" data-tip="Stays on screen while a video is showing">Always visible</button>
             <button type="button" data-v="manual" data-tip="Only after the shortcut or the popup button">Shortcut only</button>
           </div>
         </div>
@@ -318,9 +357,9 @@
             <label>Secondary <input type="color" id="accentS"></label>
           </div>
         </div>
-        <div class="field">
-          <span>Auto-hide when idle</span>
-          <select id="tbAutoHide"><option value="0">Never</option><option value="2">After 2 s</option><option value="3">After 3 s</option><option value="5">After 5 s</option><option value="8">After 8 s</option></select>
+        <div class="field" id="tbAutoHideRow">
+          <span>Hide when the mouse stops</span>
+          <select id="tbAutoHide"><option value="1">After 1 s</option><option value="2">After 2 s</option><option value="3">After 3 s</option><option value="5">After 5 s</option><option value="8">After 8 s</option></select>
         </div>
       </div>
 

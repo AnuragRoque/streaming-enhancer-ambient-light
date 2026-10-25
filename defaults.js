@@ -2,6 +2,9 @@
 // inject.js and player.js keep their own copies because they run in the page,
 // not the extension. Keep the four in step.
 var QLOCK_KEY = 'qlock';
+// The backdrop picture: { data: data URL, at: ms }. In storage.local, as it's far
+// bigger than storage.sync allows.
+var QLOCK_IMAGE_KEY = 'qlockImage';
 
 // Floating toolbar buttons, in default order. `on` is the default visibility.
 var QLOCK_BUTTONS = [
@@ -41,10 +44,10 @@ var QLOCK_DEFAULTS = {
     // Shortcuts are extension commands (manifest.json), set at chrome://extensions/shortcuts.
   },
   toolbar: {
-    show: 'hover',      // 'hover' | 'always' | 'manual' (only via shortcut / popup)
+    show: 'hover',      // 'hover' (auto-hide) | 'always' (stays visible) | 'manual' (only via shortcut / popup)
     layout: 'compact',  // 'compact' | 'expanded' (adds the timeline row)
     theme: 'glass',     // 'dark' | 'light' | 'glass'
-    autoHide: 3,        // seconds of no mouse movement before it fades; 0 = never
+    autoHide: 3,        // seconds of no mouse movement before it fades in 'hover' / 'manual'
     accent: 'rose',     // a QLOCK_ACCENTS id, 'dynamic' (from the site / video) or 'custom'
     primary: '#f2a7b5', // custom accent colours
     secondary: '#c9a3e6',
@@ -62,8 +65,13 @@ var QLOCK_DEFAULTS = {
   },
   backdrop: {
     mode: 'off',     // 'off' | 'ambient' (glow from the edges) | 'blur' (blurred copy fills the bars)
+                     // | 'rgb' (LED-strip style light) | 'image' (the user's picture behind the video)
     intensity: 80,   // 0 .. 100
-    blur: 50         // 0 .. 100
+    blur: 50,        // 0 .. 100: softness / glow spread / picture blur
+    rgbEffect: 'wave',   // 'wave' (rainbow chasing around) | 'cycle' (whole strip changes colour) | 'breathe' | 'static'
+    rgbColor: '#8a5cff', // for 'breathe' and 'static'
+    rgbSpeed: 40,        // 1 .. 100
+    imageAt: 0           // when the picture in storage.local (QLOCK_IMAGE_KEY) was set; 0 = none
   },
   playback: {
     speed: 1,
@@ -72,9 +80,11 @@ var QLOCK_DEFAULTS = {
     seekStep: 10     // seconds, for toolbar buttons, side buttons and seek commands
   },
   mouse: {
-    wheel: 'fullscreen', // wheel over the video changes volume: 'off' | 'fullscreen' | 'always'
+    wheelVolume: 'off',  // wheel alone (no right button) over the video = volume: 'off' | 'fullscreen' | 'always'
     rightWheel: true,    // hold right button + wheel over the video = volume, anywhere
-    sideButtons: 'video',// back/forward mouse buttons seek: 'off' | 'video' (pointer over it / fullscreen) | 'page'
+    sideButtons: 'video',// mouse-button seek: 'off' | 'video' (pointer over it / fullscreen) | 'page'
+    seekBackButton: 3,   // MouseEvent.button that seeks back (3 = back side button); -1 = none
+    seekFwdButton: 4,    // MouseEvent.button that seeks forward (4 = forward side button); -1 = none
     volumeStep: 5,       // percent
     hideCursor: true     // hide the cursor over the video in fullscreen when idle
   },
@@ -118,5 +128,9 @@ function qlockMerge(defaults, stored) {
   }
   var out = merge(defaults, stored);
   if (out.toolbar) out.toolbar.buttons = qlockButtons(out.toolbar.buttons);
+  // 1.2.1: the plain wheel stopped changing volume by default (was 'wheel', on in
+  // fullscreen). Only an explicit 'always' is carried over.
+  var sm = stored && stored.mouse;
+  if (out.mouse && sm && sm.wheelVolume === undefined && sm.wheel === 'always') out.mouse.wheelVolume = 'always';
   return out;
 }

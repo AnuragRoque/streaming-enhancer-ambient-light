@@ -56,9 +56,9 @@
     },
     display: { rememberPerSite: false, smartCrop: true },
     picture: { brightness: 100, contrast: 100, saturation: 100, gamma: 100, warmth: 0, sharpness: 0, grayscale: 0 },
-    backdrop: { mode: 'off', intensity: 80, blur: 50 },
+    backdrop: { mode: 'off', intensity: 80, blur: 50, rgbEffect: 'wave', rgbColor: '#8a5cff', rgbSpeed: 40, imageAt: 0 },
     playback: { speed: 1, rememberSpeed: true, speedStep: 0.25, seekStep: 10 },
-    mouse: { wheel: 'fullscreen', rightWheel: true, sideButtons: 'video', volumeStep: 5, hideCursor: true }
+    mouse: { wheelVolume: 'off', rightWheel: true, sideButtons: 'video', seekBackButton: 3, seekFwdButton: 4, volumeStep: 5, hideCursor: true }
   };
   var PICTURE_DEFAULT = DEF.picture;
 
@@ -94,7 +94,7 @@
   }
   refreshCfg();
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.2.1';
   var retired = false; // the extension was updated or removed under this page
   function on() { return !retired && cfg.enabled && cfg.videoController.enabled; }
 
@@ -196,9 +196,12 @@
     if (osdUi) accentVars(osdUi.box);
   }
 
+  // Target for messages to the bridge in this same window.
+  function selfOrigin() {
+    return G.location.origin && G.location.origin !== 'null' && G.location.protocol !== 'file:' ? G.location.origin : '*';
+  }
   function postPatch(patch) {
-    var o = G.location.origin && G.location.origin !== 'null' && G.location.protocol !== 'file:' ? G.location.origin : '*';
-    try { G.postMessage({ __qlock: 'patch', patch: patch }, o); } catch (e) { /* ignore */ }
+    try { G.postMessage({ __qlock: 'patch', patch: patch }, selfOrigin()); } catch (e) { /* ignore */ }
   }
 
   // Command shortcuts (chrome://extensions/shortcuts), passed along with commands.
@@ -542,7 +545,7 @@
     }
     var t = computeTransform(v);
     lastT = t;
-    var bdOn = backdropWanted(v) && !isDrm(v);
+    var bdOn = backdropWanted(v) && !(isDrm(v) && bdFrames(backdrop().mode));
     var props = {};
     if (t.identity) {
       props.scale = props.rotate = props.translate = props['transform-origin'] = null;
@@ -829,11 +832,16 @@
   var liveBackdrop = null;
   var liveBackdropAt = 0;
   var STRIPS = ['top', 'bottom', 'left', 'right'];
-  var bd = { src: null, sctx: null, strips: {}, v: null, D: null, bars: null, timer: 0, rvfc: 0, rvfcV: null, lastDraw: 0,
-    primed: false, visible: false, mode: '', filter: 'none', over: 0, notedDrm: null };
+  var bd = { src: null, sctx: null, strips: {}, v: null, D: null, hole: null, bars: null, timer: 0, rvfc: 0, rvfcV: null, lastDraw: 0,
+    primed: false, visible: false, mode: '', filter: 'none', over: 0, notedDrm: null, sig: '',
+    img: null, imgAt: 0, imgAsked: -1 };
   var tint = { el: null, on: false };
 
   function backdrop() { return liveBackdrop || cfg.backdrop; }
+  // Ambient light and blur fill copy the video's frames, which DRM forbids;
+  // RGB light and the picture don't touch them and work everywhere.
+  function bdFrames(mode) { return mode === 'ambient' || mode === 'blur'; }
+  function bdAnimated(b) { return b.mode === 'rgb' && b.rgbEffect !== 'static'; }
   function backdropWanted(v) {
     var b = backdrop();
     return on() && b.mode !== 'off' && !!v && v.videoWidth > 0 && doc.fullscreenElement !== v;
@@ -894,9 +902,9 @@
 
   function backdropSync(v, t, active) {
     if (!active) {
-      if (v && backdropWanted(v) && isDrm(v) && bd.notedDrm !== v) {
+      if (v && backdropWanted(v) && isDrm(v) && bdFrames(backdrop().mode) && bd.notedDrm !== v) {
         bd.notedDrm = v;
-        osd('Ambient / blur fill unavailable', 'This video is DRM-protected, so its frames can’t be read', 'backdrop');
+        osd('Ambient / blur fill unavailable', 'DRM-protected video: its frames can’t be read. RGB light and Image still work', 'backdrop');
       }
       bdTeardown();
       return;
@@ -907,8 +915,11 @@
     bd.v = v;
     bd.bars = t.bars;
     bd.D = t.D;
+    bd.hole = t.hole;
     var D = t.D, H = t.hole;
     var holeOk = H.right - H.left > 4 && H.bottom - H.top > 4;
+    var pic = b.mode === 'image';
+    if (pic) bdWantImage(b);
     var rects = {
       top: { left: D.left, top: D.top, width: D.width, height: H.top - D.top },
       bottom: { left: D.left, top: H.bottom, width: D.width, height: D.top + D.height - H.bottom },
@@ -916,9 +927,14 @@
       right: { left: H.right, top: H.top, width: D.left + D.width - H.right, height: H.bottom - H.top }
     };
     var ambient = b.mode === 'ambient';
-    var S = canvasFor(D.width, D.height, 24000, 360);
+    // Glows and blurs look the same from a tiny canvas; a picture needs real pixels.
+    var S = pic ? canvasFor(D.width, D.height, 1000000, 2048) : canvasFor(D.width, D.height, 24000, 360);
     if (!bd.src) { bd.src = doc.createElement('canvas'); bd.sctx = bd.src.getContext('2d', { alpha: false }); }
     if (bd.src.width !== S.w || bd.src.height !== S.h) { bd.src.width = S.w; bd.src.height = S.h; bd.primed = false; }
+    // RGB and the picture don't follow the video, so a settings change redraws them.
+    var sig = [b.mode, b.blur, b.rgbEffect, b.rgbColor, b.rgbSpeed, bd.imgAt, Math.round(D.width), Math.round(D.height),
+      Math.round(H.left - D.left), Math.round(H.top - D.top), Math.round(H.right - D.left), Math.round(H.bottom - D.top)].join('|');
+    if (sig !== bd.sig) { bd.sig = sig; bd.primed = false; }
     // Blur as a share of the width, applied inside the small canvas.
     var soft = clamp(b.blur, 0, 100) / 100;
     var blurPx = (ambient ? 0.035 + soft * 0.06 : 0.006 + soft * 0.03) * S.w;
@@ -940,7 +956,7 @@
       st.on = true;
       st.r = r;
       bd.visible = true;
-      var size = canvasFor(r.width, r.height, 21000, 1024);
+      var size = pic ? canvasFor(r.width, r.height, 400000, 2560) : canvasFor(r.width, r.height, 21000, 1024);
       if (st.el.width !== size.w || st.el.height !== size.h) { st.el.width = size.w; st.el.height = size.h; resized = true; }
     });
     layerOrder(v);
@@ -954,12 +970,33 @@
 
   function bdDraw() {
     var v = bd.v, S = bd.src, x = bd.sctx;
-    if (!v || !S || !x || v.readyState < 2 || !v.videoWidth) return;
-    var W = S.width, H = S.height, vw = v.videoWidth, vh = v.videoHeight, b = bd.bars;
+    if (!v || !S || !x) return;
+    var W = S.width, H = S.height;
+    if (bd.mode === 'rgb') rgbPaint(x, W, H, backdrop(), now());
+    else if (bd.mode === 'image') imagePaint(x, W, H, backdrop());
+    else if (!framePaint(v, x, W, H)) return;
+    bd.primed = true;
+    var D = bd.D;
+    STRIPS.forEach(function (id) {
+      var st = bd.strips[id];
+      if (!st || !st.on) return;
+      var r = st.r, c = st.ctx;
+      c.globalCompositeOperation = 'copy';
+      c.imageSmoothingEnabled = true;
+      c.drawImage(S, (r.left - D.left) / D.width * W, (r.top - D.top) / D.height * H,
+        Math.max(0.5, r.width / D.width * W), Math.max(0.5, r.height / D.height * H), 0, 0, st.el.width, st.el.height);
+    });
+    bd.lastDraw = now();
+  }
+
+  // Ambient light / blur fill: the video's own picture.
+  function framePaint(v, x, W, H) {
+    if (v.readyState < 2 || !v.videoWidth) return false;
+    var vw = v.videoWidth, vh = v.videoHeight, b = bd.bars;
     // Source: the real picture only, never the bars inside the video.
     var sx = b ? b.l * vw : 0, sy = b ? b.t * vh : 0;
     var sw = vw * (b ? 1 - b.l - b.r : 1), sh = vh * (b ? 1 - b.t - b.b : 1);
-    if (sw < 2 || sh < 2) return;
+    if (sw < 2 || sh < 2) return false;
     var o = bd.over;
     try {
       x.filter = bd.filter;
@@ -976,30 +1013,106 @@
         x.globalAlpha = bd.primed ? 0.6 : 1;
         x.drawImage(v, sx, sy, sw, sh, (W - dw) / 2, (H - dh) / 2, dw, dh);
       }
-      bd.primed = true;
-    } catch (e) { return; }
-    var D = bd.D;
-    STRIPS.forEach(function (id) {
-      var st = bd.strips[id];
-      if (!st || !st.on) return;
-      var r = st.r, c = st.ctx;
-      c.globalCompositeOperation = 'copy';
-      c.imageSmoothingEnabled = true;
-      c.drawImage(S, (r.left - D.left) / D.width * W, (r.top - D.top) / D.height * H,
-        Math.max(0.5, r.width / D.width * W), Math.max(0.5, r.height / D.height * H), 0, 0, st.el.width, st.el.height);
-    });
-    bd.lastDraw = now();
+    } catch (e) { return false; }
+    return true;
   }
 
-  // Redraw on new video frames only (requestVideoFrameCallback), at most
-  // 8 a second for ambient light and 15 for blur fill.
+  // The picture's rectangle in source-canvas coordinates.
+  function holeIn(W, H) {
+    var D = bd.D, P = bd.hole;
+    return { l: (P.left - D.left) / D.width * W, t: (P.top - D.top) / D.height * H,
+      w: (P.right - P.left) / D.width * W, h: (P.bottom - P.top) / D.height * H };
+  }
+
+  var RGB_NAMES = { wave: 'Rainbow wave around the picture', cycle: 'Whole strip cycles through colours', breathe: 'Your colour, slowly breathing', static: 'Your colour, steady' };
+  // RGB light, like an LED strip behind a TV: a light source the size of the
+  // picture, blurred outwards, so the bars glow brightest next to the picture
+  // and fade towards the edge. Softness 0 lights the bars evenly.
+  function rgbPaint(x, W, H, b, t) {
+    var P = holeIn(W, H);
+    var soft = clamp(b.blur, 0, 100) / 100;
+    var spd = clamp(b.rgbSpeed, 1, 100) / 100;
+    var sec = t / 1000;
+    var cx = P.l + P.w / 2, cy = P.t + P.h / 2;
+    x.globalAlpha = 1;
+    x.filter = 'none';
+    x.fillStyle = '#000';
+    x.fillRect(0, 0, W, H);
+    var fill, alpha = 1;
+    var hue = (sec / (40 - 36 * spd) * 360) % 360; // one round in 40 s .. 4 s
+    if (b.rgbEffect === 'wave' && typeof x.createConicGradient === 'function') {
+      // The rainbow turns around the picture: one turn in 24 s .. 2 s.
+      fill = x.createConicGradient(sec / (24 - 22 * spd) * Math.PI * 2, cx, cy);
+      for (var i = 0; i <= 6; i++) fill.addColorStop(i / 6, 'hsl(' + i * 60 + ',100%,55%)');
+    } else if (b.rgbEffect === 'wave' || b.rgbEffect === 'cycle') {
+      fill = 'hsl(' + hue.toFixed(1) + ',100%,55%)';
+    } else {
+      fill = hexOk(b.rgbColor) ? b.rgbColor : '#8a5cff';
+      // One breath in 7 s .. 1.2 s, never quite dark.
+      if (b.rgbEffect === 'breathe') alpha = 0.12 + 0.88 * (0.5 - 0.5 * Math.cos(sec / (7 - 5.8 * spd) * Math.PI * 2));
+    }
+    var bar = Math.max(P.l, W - P.l - P.w, P.t, H - P.t - P.h, 1);
+    var blurPx = soft * 0.9 * bar;
+    var grow = bar * (1 - soft) + blurPx * 0.5;
+    x.globalAlpha = alpha;
+    x.filter = blurPx >= 0.5 ? 'blur(' + blurPx.toFixed(1) + 'px)' : 'none';
+    x.fillStyle = fill;
+    x.fillRect(P.l - grow, P.t - grow, P.w + 2 * grow, P.h + 2 * grow);
+    x.filter = 'none';
+    x.globalAlpha = 1;
+  }
+
+  // The user's picture over the whole player box, behind the video, so the
+  // bars show its edges. Softness blurs it.
+  function imagePaint(x, W, H, b) {
+    x.globalAlpha = 1;
+    x.filter = 'none';
+    x.fillStyle = '#000';
+    x.fillRect(0, 0, W, H);
+    var img = bd.img;
+    if (!img) return;
+    var blurPx = clamp(b.blur, 0, 100) / 100 * 0.02 * Math.max(W, H);
+    var o = blurPx * 2;
+    var sc = Math.max((W + 2 * o) / img.width, (H + 2 * o) / img.height);
+    var dw = img.width * sc, dh = img.height * sc;
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = 'high';
+    x.filter = blurPx >= 0.5 ? 'blur(' + blurPx.toFixed(1) + 'px)' : 'none';
+    try { x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh); } catch (e) { /* closed bitmap */ }
+    x.filter = 'none';
+  }
+
+  // The picture comes from extension storage through the bridge, asked for
+  // only while image mode is on.
+  function bdWantImage(b) {
+    if (!b.imageAt) { if (bd.img) { bd.img = null; bd.imgAt = 0; } return; }
+    if (bd.imgAt === b.imageAt || bd.imgAsked === b.imageAt) return;
+    bd.imgAsked = b.imageAt;
+    try { G.postMessage({ __qlock: 'needImage' }, selfOrigin()); } catch (e) { /* ignore */ }
+  }
+  G.addEventListener('message', function (e) {
+    if (e.source !== G || !e.data || e.data.__qlock !== 'image') return;
+    var at = +e.data.at || 0, blob = e.data.blob;
+    if (!at || !blob || typeof G.createImageBitmap !== 'function') { bd.img = null; bd.imgAt = at; bd.sig = ''; applyAll(); return; }
+    G.createImageBitmap(blob).then(function (img) {
+      if (bd.img && bd.img.close) bd.img.close();
+      bd.img = img; bd.imgAt = at; bd.sig = '';
+      applyAll();
+    }, function () { bd.imgAt = at; });
+  });
+
+  // Video modes redraw on new video frames only (requestVideoFrameCallback),
+  // at most 8 a second for ambient light and 15 for blur fill. Animated RGB
+  // runs at 25 a second; a steady colour and the picture are drawn once per change.
   function bdSchedule() {
     if (bd.rvfc || bd.timer || !bd.v || !bd.visible) return;
+    var frames = bdFrames(bd.mode);
+    if (!frames && !bdAnimated(backdrop())) return;
     var v = bd.v;
-    var iv = bd.mode === 'ambient' ? 125 : 66;
+    var iv = bd.mode === 'ambient' ? 125 : frames ? 66 : 40;
     var wait = iv - (now() - bd.lastDraw);
     if (wait > 4) { bd.timer = G.setTimeout(function () { bd.timer = 0; bdSchedule(); }, wait); return; }
-    if (typeof v.requestVideoFrameCallback === 'function') {
+    if (frames && typeof v.requestVideoFrameCallback === 'function') {
       bd.rvfcV = v;
       bd.rvfc = v.requestVideoFrameCallback(function () { bd.rvfc = 0; bdTick(); });
     } else {
@@ -1019,10 +1132,12 @@
 
   function bdTeardown() {
     bdStop();
+    // Picture mode's canvases are large; let their memory go too.
     STRIPS.forEach(function (id) {
       var st = bd.strips[id];
-      if (st) { st.on = false; if (st.el.parentNode) st.el.parentNode.removeChild(st.el); }
+      if (st) { st.on = false; if (st.el.parentNode) st.el.parentNode.removeChild(st.el); if (st.el.width > 2) { st.el.width = 2; st.el.height = 2; } }
     });
+    if (bd.src && bd.src.width * bd.src.height > 100000) { bd.src.width = 2; bd.src.height = 2; }
     bd.v = null;
     bd.visible = false;
     bd.primed = false;
@@ -1057,31 +1172,41 @@
     if (tint.el && tint.el.parentNode) tint.el.parentNode.removeChild(tint.el);
   }
 
+  var BD_MODES = ['off', 'ambient', 'blur', 'rgb', 'image'];
+  var RGB_EFFECTS = ['wave', 'cycle', 'breathe', 'static'];
   function setBackdrop(b, save, quiet) {
     var cur = backdrop();
     var o = {
-      mode: ['off', 'ambient', 'blur'].indexOf(b.mode) !== -1 ? b.mode : cur.mode,
+      mode: BD_MODES.indexOf(b.mode) !== -1 ? b.mode : cur.mode,
       intensity: typeof b.intensity === 'number' ? clamp(Math.round(b.intensity), 0, 100) : cur.intensity,
-      blur: typeof b.blur === 'number' ? clamp(Math.round(b.blur), 0, 100) : cur.blur
+      blur: typeof b.blur === 'number' ? clamp(Math.round(b.blur), 0, 100) : cur.blur,
+      rgbEffect: RGB_EFFECTS.indexOf(b.rgbEffect) !== -1 ? b.rgbEffect : cur.rgbEffect,
+      rgbColor: hexOk(b.rgbColor) ? b.rgbColor.toLowerCase() : cur.rgbColor,
+      rgbSpeed: typeof b.rgbSpeed === 'number' ? clamp(Math.round(b.rgbSpeed), 1, 100) : cur.rgbSpeed,
+      imageAt: typeof b.imageAt === 'number' ? b.imageAt : cur.imageAt
     };
     liveBackdrop = o;
     liveBackdropAt = now();
     bd.notedDrm = null;
     applyAll(); refreshUi();
     if (save) postPatch({ backdrop: o });
-    if (!quiet && o.mode !== cur.mode) {
+    if (!quiet && (o.mode !== cur.mode || (o.mode === 'rgb' && o.rgbEffect !== cur.rgbEffect))) {
       var v = targetVideo();
-      var names = { off: 'Backdrop off', ambient: 'Ambient light', blur: 'Blur fill' };
+      var names = { off: 'Backdrop off', ambient: 'Ambient light', blur: 'Blur fill', rgb: 'RGB light', image: 'Image backdrop' };
       var desc = o.mode === 'off' ? 'Black bars stay black'
-        : v && isDrm(v) ? 'Not available: DRM-protected video'
+        : v && isDrm(v) && bdFrames(o.mode) ? 'Not available: DRM-protected video. RGB light and Image still work'
         : v && doc.fullscreenElement === v ? 'Needs the player’s own fullscreen, not the bare video'
-        : o.mode === 'ambient' ? 'Black bars glow with the picture’s edge colours' : 'Black bars filled with a soft blurred copy';
+        : o.mode === 'ambient' ? 'Black bars glow with the picture’s edge colours'
+        : o.mode === 'blur' ? 'Black bars filled with a soft blurred copy'
+        : o.mode === 'rgb' ? RGB_NAMES[o.rgbEffect]
+        : o.imageAt ? 'Your picture fills the black bars' : 'Choose a picture in the QualityLock popup (Display tab)';
       osd(names[o.mode], desc, 'backdrop');
     }
   }
   function cycleBackdrop() {
-    var order = ['off', 'ambient', 'blur'];
-    var next = order[(order.indexOf(backdrop().mode) + 1) % order.length];
+    var b = backdrop();
+    var order = ['off', 'ambient', 'blur', 'rgb'].concat(b.imageAt ? ['image'] : []);
+    var next = order[(order.indexOf(b.mode) + 1) % order.length];
     setBackdrop({ mode: next }, true);
   }
 
@@ -1134,47 +1259,157 @@
     if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(noop); } else v.pause();
   }
 
-  function isMuted(v) {
+  // ==================================================================
+  // Volume: through the site's own player first (its API, or the volume
+  // slider in its controls), so the player's slider, mute button and saved
+  // level follow. The <video> element itself is the fallback.
+  // ==================================================================
+  function jwPlayer(v) {
+    var c = v.closest && v.closest('.jwplayer');
+    if (!c || !c.id || typeof G.jwplayer !== 'function') return null;
+    try { var p = G.jwplayer(c.id); return p && typeof p.setVolume === 'function' && typeof p.getVolume() === 'number' ? p : null; } catch (e) { return null; }
+  }
+  function vjsPlayer(v) {
+    var c = v.closest && v.closest('.video-js');
+    if (!c) return null;
+    var p = c.player;
+    if (!p && G.videojs && typeof G.videojs.getPlayer === 'function') { try { p = G.videojs.getPlayer(c); } catch (e) { p = null; } }
+    return p && typeof p.volume === 'function' && typeof p.muted === 'function' ? p : null;
+  }
+
+  // A volume <input type=range> in the player's own controls (Plyr, Shaka UI,
+  // Twitch and many custom players). A slider the site turns out to ignore is
+  // skipped from then on.
+  var VOL_LABEL = /volume|lautst|volumen|громк|音量/i;
+  var volSl = { v: null, el: null, at: 0, bad: null };
+  function volSlider(v) {
+    if (volSl.v === v && now() - volSl.at < 5000 && (!volSl.el || volSl.el.isConnected)) return volSl.el;
+    var found = null;
+    for (var node = v.parentElement, i = 0; node && i < 6 && !found; node = node.parentElement, i++) {
+      if (node === doc.documentElement) break;
+      var list = node.querySelectorAll('input[type="range"]');
+      for (var j = 0; j < list.length && !found; j++) {
+        var el = list[j];
+        if (el === volSl.bad) continue;
+        var lab = [el.getAttribute('aria-label'), el.title, el.name, el.id, el.getAttribute('class'),
+          el.getAttribute('data-a-target'), el.getAttribute('data-testid'), el.getAttribute('data-plyr')].join(' ');
+        if (VOL_LABEL.test(lab)) found = el;
+      }
+    }
+    volSl.v = v; volSl.el = found; volSl.at = now();
+    return found;
+  }
+  function rangeOf(el) {
+    var min = el.min !== '' && isFinite(+el.min) ? +el.min : 0;
+    var max = el.max !== '' && isFinite(+el.max) ? +el.max : 100;
+    return [min, max > min ? max : min + 1];
+  }
+  var valueSetter = null;
+  function setRangeValue(el, x) {
+    // The native setter, so frameworks that track the value (React) see the change.
+    try {
+      valueSetter = valueSetter || Object.getOwnPropertyDescriptor(G.HTMLInputElement.prototype, 'value').set;
+      valueSetter.call(el, String(x));
+    } catch (e) { el.value = String(x); }
+    el.dispatchEvent(new G.Event('input', { bubbles: true }));
+    el.dispatchEvent(new G.Event('change', { bubbles: true }));
+  }
+
+  // { get: 0..1, muted, set(0..1), mute(bool) or null, slider } for the player around v.
+  function siteVolume(v) {
     var yt = ytPlayer(v);
-    if (yt && typeof yt.isMuted === 'function') { try { return !!yt.isMuted(); } catch (e) { /* ignore */ } }
+    if (yt) return {
+      get: function () { return yt.getVolume() / 100; },
+      muted: function () { return yt.isMuted(); },
+      set: function (x) { yt.setVolume(Math.round(x * 100)); if (x > 0 && yt.isMuted()) yt.unMute(); },
+      mute: function (m) { if (m) yt.mute(); else yt.unMute(); }
+    };
+    var nf = nfPlayer();
+    if (nf) return {
+      get: function () { return typeof nf.getVolume === 'function' ? +nf.getVolume() : v.volume; },
+      muted: function () { return typeof nf.isMuted === 'function' ? nf.isMuted() : v.muted; },
+      set: function (x) { nf.setVolume(x); if (x > 0 && nf.isMuted && nf.isMuted()) nf.setMuted(false); },
+      mute: function (m) { nf.setMuted(m); }
+    };
+    var jw = jwPlayer(v);
+    if (jw) return {
+      get: function () { return jw.getVolume() / 100; },
+      muted: function () { return jw.getMute(); },
+      set: function (x) { jw.setVolume(Math.round(x * 100)); if (x > 0 && jw.getMute()) jw.setMute(false); },
+      mute: function (m) { jw.setMute(m); }
+    };
+    var vj = vjsPlayer(v);
+    if (vj) return {
+      get: function () { return vj.volume(); },
+      muted: function () { return vj.muted(); },
+      set: function (x) { vj.volume(x); if (x > 0 && vj.muted()) vj.muted(false); },
+      mute: function (m) { vj.muted(m); }
+    };
+    var sl = volSlider(v);
+    if (sl) return {
+      get: function () { var r = rangeOf(sl); return (+sl.value - r[0]) / (r[1] - r[0]); },
+      muted: function () { return v.muted; },
+      set: function (x) { var r = rangeOf(sl); setRangeValue(sl, Math.round((r[0] + x * (r[1] - r[0])) * 1e4) / 1e4); },
+      mute: null,
+      slider: sl
+    };
+    return null;
+  }
+
+  // The site's slider counts only if the video's volume followed it. If not,
+  // the element is set directly and that slider is dropped. One check covers
+  // a burst of wheel steps.
+  var slWatch = null;
+  function checkSlider(v, sl, vol) {
+    var w = slWatch;
+    if (!w || w.v !== v) {
+      if (w) { G.clearTimeout(w.timer); w.v.removeEventListener('volumechange', w.hit); }
+      w = slWatch = { v: v, moved: false, timer: 0 };
+      w.hit = function () { w.moved = true; };
+      v.addEventListener('volumechange', w.hit);
+    }
+    w.sl = sl; w.vol = vol;
+    G.clearTimeout(w.timer);
+    w.timer = G.setTimeout(function () {
+      v.removeEventListener('volumechange', w.hit);
+      slWatch = null;
+      if (!w.moved && Math.abs(v.volume - w.vol) > 0.02) { volSl.bad = w.sl; volSl.at = 0; v.volume = w.vol; }
+      if (w.vol > 0 && v.muted) v.muted = false;
+    }, 250);
+  }
+
+  function isMuted(v) {
+    var api = siteVolume(v);
+    if (api) { try { return !!api.muted(); } catch (e) { /* fall back */ } }
     return v.muted;
+  }
+  // YouTube's loudness normalisation keeps video.volume below its own slider,
+  // so the player's value is read where there is one.
+  function getVolume(v) {
+    var api = siteVolume(v);
+    if (api) { try { var x = +api.get(); if (isFinite(x)) return clamp(x, 0, 1); } catch (e) { /* fall back */ } }
+    return v.volume;
   }
   function setVolume(v, vol, quiet) {
     if (!v) return;
     vol = clamp(vol, 0, 1);
+    var api = siteVolume(v);
     var done = false;
-    var yt = ytPlayer(v);
-    if (yt) {
-      try { yt.setVolume(Math.round(vol * 100)); if (vol > 0 && yt.isMuted()) yt.unMute(); done = true; } catch (e) { done = false; }
-    }
-    var nf = !done && nfPlayer();
-    if (nf) {
-      try { nf.setVolume(vol); if (vol > 0 && nf.isMuted && nf.isMuted()) nf.setMuted(false); done = true; } catch (e) { done = false; }
-    }
+    if (api) { try { api.set(vol); done = true; } catch (e) { done = false; } }
     if (!done) { v.volume = vol; if (vol > 0 && v.muted) v.muted = false; }
+    else if (api.slider) checkSlider(v, api.slider, vol);
     if (!quiet) osd('Volume ' + Math.round(vol * 100) + '%', vol === 0 ? 'Muted' : '', vol === 0 ? 'mute' : 'volume', vol);
     refreshUi();
   }
   function toggleMute(v) {
     if (!v) return;
     var muted = isMuted(v);
-    var yt = ytPlayer(v);
+    var api = siteVolume(v);
     var done = false;
-    if (yt) { try { if (muted) yt.unMute(); else yt.mute(); done = true; } catch (e) { done = false; } }
-    var nf = !done && nfPlayer();
-    if (nf) { try { nf.setMuted(!muted); done = true; } catch (e) { done = false; } }
+    if (api && api.mute) { try { api.mute(!muted); done = true; } catch (e) { done = false; } }
     if (!done) v.muted = !muted;
     osd(muted ? 'Sound on' : 'Muted', muted ? 'Volume ' + Math.round(getVolume(v) * 100) + '%' : '', muted ? 'volume' : 'mute');
     refreshUi();
-  }
-  // YouTube's loudness normalisation keeps video.volume below its own slider,
-  // so read the player's value where there is one.
-  function getVolume(v) {
-    var yt = ytPlayer(v);
-    if (yt && typeof yt.getVolume === 'function') { try { return clamp(yt.getVolume() / 100, 0, 1); } catch (e) { /* ignore */ } }
-    var nf = nfPlayer();
-    if (nf && typeof nf.getVolume === 'function') { try { return clamp(+nf.getVolume(), 0, 1); } catch (e) { /* ignore */ } }
-    return v.volume;
   }
   // Scrolling up on a muted video unmutes it at its old level; scrolling down
   // keeps it muted.
@@ -1594,7 +1829,7 @@
   // ==================================================================
   var OSD_CSS = [
     ':host{all:initial}',
-    '.o{display:flex;align-items:center;gap:11px;min-width:190px;max-width:min(520px,86vw);padding:10px 16px 10px 12px;border-radius:14px;',
+    '.o{display:flex;align-items:center;gap:11px;box-sizing:border-box;width:max-content;min-width:230px;max-width:min(520px,86vw);padding:10px 16px 10px 12px;border-radius:14px;',
     'background:rgba(14,16,20,.86);color:#fff;box-shadow:0 12px 34px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset;',
     'backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);',
     'font:600 13.5px/1.25 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;transform:translateX(-50%) translateY(-6px);opacity:0;',
@@ -1602,7 +1837,7 @@
     '.o.show{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0);transition:opacity .18s ease,transform .18s ease,visibility 0s}',
     '.ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent,#f2a7b5) 20%,transparent);color:var(--accent,#f2a7b5);flex:none}',
     '.ic svg{width:19px;height:19px}',
-    '.tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:170px}',
+    '.tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}',
     '.t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}',
     '.d{font-weight:500;font-size:11.5px;color:rgba(255,255,255,.66);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.d:empty{display:none}',
@@ -1755,6 +1990,10 @@
     '.note{font-size:11px;line-height:1.45;color:var(--muted)}',
     '.note.warn{color:#ffb4a8}',
     '.t-light .note.warn{color:#b3261e}',
+    '.grp{display:flex;flex-direction:column;gap:9px}',
+    '.crow{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:650;color:var(--muted);cursor:pointer}',
+    '.clr{width:46px;height:26px;padding:0;border:1px solid var(--line);border-radius:8px;background:transparent;cursor:pointer}',
+    '.clr::-webkit-color-swatch-wrapper{padding:3px}.clr::-webkit-color-swatch{border:0;border-radius:5px}',
     '.cust{display:flex;gap:6px}.cust input{flex:1;min-width:0;height:28px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--fg);',
     'font:600 12px/1 inherit;padding:0 9px;outline:none}.cust input:focus{border-color:var(--accent)}',
     '.tip{position:absolute;z-index:9;padding:6px 9px;border-radius:8px;background:rgba(8,9,11,.92);color:#fff;font-size:11.5px;font-weight:600;',
@@ -1778,7 +2017,7 @@
   var tb = {
     host: null, root: null, w: null, bar: null, row: null, tl: null, btn: {}, panel: null, panelId: '', panelApi: null,
     tip: null, tipTimer: 0, tipFor: null, enabled: cfg.toolbar.show !== 'manual', shown: false, force: 0,
-    drag: null, hoverTb: false, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false,
+    drag: null, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false,
     pos: { fx: 0.5, fy: 0.035 }
   };
   try {
@@ -1960,29 +2199,52 @@
 
   function buildBackdropPanel() {
     var b = backdrop();
-    var modeSeg = seg([['off', 'Off'], ['ambient', 'Ambient light', 'The bars glow with the colours at the picture’s edges'], ['blur', 'Blur fill', 'The bars show a soft, blurred copy of the picture']],
+    var modeSeg = seg([['off', 'Off'], ['ambient', 'Ambient', 'The bars glow with the colours at the picture’s edges'],
+      ['blur', 'Blur', 'The bars show a soft, blurred copy of the picture'], ['rgb', 'RGB', 'LED-strip style light around the picture. Works on Netflix and Prime too'],
+      ['image', 'Image', 'Your own picture behind the video (choose it in the QualityLock popup)']],
       b.mode, function (m) { setBackdrop({ mode: m }, true); });
     var pctFmt = function (x) { return Math.round(x) + '%'; };
     var inten = slider('Intensity', 0, 100, 1, b.intensity, pctFmt, function (x) { setBackdrop({ intensity: x }, false, true); }, function (x) { setBackdrop({ intensity: x }, true, true); }, 80);
     var soft = slider('Softness', 0, 100, 1, b.blur, pctFmt, function (x) { setBackdrop({ blur: x }, false, true); }, function (x) { setBackdrop({ blur: x }, true, true); }, 50);
+    // RGB light: effect, colour (breathe / static), speed (animated ones)
+    var fx = h('div', { class: 'chips ar4' });
+    var fxEls = [];
+    [['wave', 'Wave'], ['cycle', 'Cycle'], ['breathe', 'Breathe'], ['static', 'Static']].forEach(function (f) {
+      var c = h('button', { type: 'button', class: 'chip', text: f[1], title: RGB_NAMES[f[0]], onclick: function () { setBackdrop({ rgbEffect: f[0] }, true); } });
+      c.__id = f[0]; fxEls.push(c); fx.appendChild(c);
+    });
+    var color = h('input', { type: 'color', class: 'clr', value: hexOk(b.rgbColor) ? b.rgbColor : '#8a5cff', 'aria-label': 'Light colour' });
+    color.addEventListener('input', function () { setBackdrop({ rgbColor: color.value }, false, true); });
+    color.addEventListener('change', function () { setBackdrop({ rgbColor: color.value }, true, true); });
+    var colorRow = h('label', { class: 'crow' }, [h('span', { text: 'Colour' }), color]);
+    var spd = slider('Speed', 1, 100, 1, b.rgbSpeed, pctFmt, function (x) { setBackdrop({ rgbSpeed: x }, false, true); }, function (x) { setBackdrop({ rgbSpeed: x }, true, true); }, 40);
+    var rgbBox = h('div', { class: 'grp' }, [fx, colorRow, spd.el]);
     var note = h('div', { class: 'note' });
     var bars = buildBarsControl();
     var el = h('div', {}, [
       h('div', { class: 'ph' }, [h('b', { text: 'Black bar backdrop' })]),
-      modeSeg.el, inten.el, soft.el, note, bars.el
+      modeSeg.el, rgbBox, inten.el, soft.el, note, bars.el
     ]);
     return {
       el: el,
       update: function () {
         var c = backdrop();
         modeSeg.set(c.mode);
-        inten.set(c.intensity); soft.set(c.blur);
+        inten.set(c.intensity); soft.set(c.blur); spd.set(c.rgbSpeed);
+        rgbBox.style.display = c.mode === 'rgb' ? '' : 'none';
+        fxEls.forEach(function (x) { x.classList.toggle('on', x.__id === c.rgbEffect); });
+        colorRow.style.display = c.rgbEffect === 'breathe' || c.rgbEffect === 'static' ? '' : 'none';
+        spd.el.style.display = c.rgbEffect === 'static' ? 'none' : '';
+        if (hexOk(c.rgbColor) && tb.root.activeElement !== color && color.value !== c.rgbColor) color.value = c.rgbColor;
         bars.update();
         var v = targetVideo();
-        var msg = 'Fills only the black bars, so the picture itself is never zoomed or cropped.';
+        var msg = c.mode === 'rgb' ? 'Lights the black bars like an LED strip behind the screen. Softness spreads the glow.'
+          : c.mode === 'image' ? 'Softness blurs the picture. The picture is drawn inside this page, so the site can see it.'
+          : 'Fills only the black bars, so the picture itself is never zoomed or cropped.';
         var warnMsg = '';
-        if (v && isDrm(v)) warnMsg = 'This video is DRM-protected (Netflix, Prime and similar): browsers don’t let extensions read its frames, so the backdrop can’t be drawn.';
-        else if (v && doc.fullscreenElement === v) warnMsg = 'The bare video is fullscreen, which hides everything behind it. Use the toolbar’s fullscreen button instead.';
+        if (v && isDrm(v) && bdFrames(c.mode)) warnMsg = 'This video is DRM-protected (Netflix, Prime and similar): browsers don’t let extensions read its frames, so ambient light and blur fill can’t be drawn. RGB light and Image still work.';
+        else if (v && doc.fullscreenElement === v && c.mode !== 'off') warnMsg = 'The bare video is fullscreen, which hides everything behind it. Use the toolbar’s fullscreen button instead.';
+        else if (c.mode === 'image' && !c.imageAt) warnMsg = 'No picture yet. Choose one in the QualityLock popup → Display → Black bar backdrop.';
         else if (c.mode !== 'off' && !bd.visible && bd.v) msg = 'No black bars right now — the picture already fills the player.';
         note.textContent = warnMsg || msg;
         note.classList.toggle('warn', !!warnMsg);
@@ -2113,8 +2375,6 @@
       // Keep our clicks, keys and wheel turns away from the player under us.
       ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'wheel', 'contextmenu', 'touchstart', 'touchend', 'keydown', 'keyup', 'keypress']
         .forEach(function (t) { tb.host.addEventListener(t, function (e) { e.stopPropagation(); }); });
-      tb.host.addEventListener('pointerenter', function () { tb.hoverTb = true; });
-      tb.host.addEventListener('pointerleave', function () { tb.hoverTb = false; });
       tb.root.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closePanel(); } });
     }
     tb.sig = tbSig();
@@ -2307,12 +2567,15 @@
       grip.removeEventListener('pointermove', move);
       grip.removeEventListener('pointerup', up);
       grip.removeEventListener('pointercancel', up);
+      grip.removeEventListener('lostpointercapture', up);
       try { G.localStorage.setItem('__qlock_tbpos', JSON.stringify(tb.pos)); } catch (x) { /* ignore */ }
       placePanel();
     }
     grip.addEventListener('pointermove', move);
     grip.addEventListener('pointerup', up);
     grip.addEventListener('pointercancel', up);
+    // The grip can be rebuilt mid-drag; without this the toolbar stayed pinned.
+    grip.addEventListener('lostpointercapture', up);
   }
 
   function visibleBox(v) {
@@ -2358,7 +2621,7 @@
     if (!quiet) osd(onOff ? 'Toolbar on' : 'Toolbar hidden', onOff ? (k ? k + ' hides it' : '') : (k ? k + ' brings it back' : 'Bring it back from the QualityLock popup'), 'layout');
   }
 
-  function idleMs() { return Math.max(1, cfg.toolbar.autoHide || 0) * 1000; }
+  function idleMs() { return (cfg.toolbar.autoHide > 0 ? cfg.toolbar.autoHide : 3) * 1000; }
 
   var idleAttr = false;
   function setIdleCursor(idle) {
@@ -2380,15 +2643,20 @@
     var box = playerBox(v);
     var fsLike = box.fs;
     var t = now();
-    var autoHide = cfg.toolbar.autoHide > 0;
-    var recent = !autoHide || t - ptr.at < idleMs();
+    var idle = t - ptr.at;
     var overVideo = ptr.inWin && pointIn(box.rect, ptr.x, ptr.y);
-    var pinned = !!tb.panelId || !!tb.drag || tb.hoverTb || t < tb.force;
+    // Read from the pointer position, not enter/leave events: those go missing
+    // when the toolbar is re-mounted under a still pointer (fullscreen, window
+    // fill), which left it stuck on screen.
+    var overTb = tb.shown && ptr.inWin && !!tb.bar && pointIn(tb.bar.getBoundingClientRect(), ptr.x, ptr.y);
+    var pinned = !!tb.panelId || !!tb.drag || t < tb.force;
+    // Auto-hide: shown while the mouse moves over the video, gone once it rests.
+    // Resting on the toolbar itself gets a few seconds more to read tooltips.
     var want = tb.enabled && bigEnough(v, box) &&
-      (pinned || (recent && (cfg.toolbar.show === 'always' || overVideo)));
+      (cfg.toolbar.show === 'always' || pinned || (overTb ? idle < idleMs() + 5000 : overVideo && idle < idleMs()));
 
     // Idle cursor in fullscreen / window fill.
-    setIdleCursor(cfg.mouse.hideCursor && fsLike && overVideo && !pinned && t - ptr.at > Math.max(2000, autoHide ? idleMs() : 2500));
+    setIdleCursor(cfg.mouse.hideCursor && fsLike && overVideo && !pinned && !overTb && idle > Math.max(2000, idleMs()));
 
     if (!want && !tb.host) return;
     if (!tb.host || tb.sig !== tbSig()) tbBuild();
@@ -2442,6 +2710,9 @@
   // Pointer tracking (cheap; the work happens in one animation frame).
   var uiRaf = 0;
   function onPointer(e) {
+    // Only real movement counts: page scripts and hover updates can send
+    // pointermove without the pointer moving, which kept the toolbar up.
+    if (!e.isTrusted || (e.type === 'pointermove' && ptr.inWin && e.clientX === ptr.x && e.clientY === ptr.y)) return;
     ptr.x = e.clientX; ptr.y = e.clientY; ptr.at = now(); ptr.inWin = true;
     if (!uiRaf) uiRaf = G.requestAnimationFrame(function () { uiRaf = 0; tbUpdate(false); });
   }
@@ -2457,7 +2728,7 @@
 
   G.setInterval(function () {
     if (!on()) { if (tb.host || idleAttr) tbUpdate(true); return; }
-    if (tb.shown || tb.panelId || now() - ptr.at < idleMs() + 3000) tbUpdate(false);
+    if (tb.shown || tb.panelId || cfg.toolbar.show === 'always' || now() - ptr.at < idleMs() + 8000) tbUpdate(false);
     // Remember frames for timeline previews while the expanded layout is in use.
     var v = tb.enabled && cfg.toolbar.layout === 'expanded' ? targetVideo() : null;
     if (v) thumbs.sample(v);
@@ -2474,7 +2745,7 @@
     var v = targetVideo();
     if (!v || !overVideoAt(v, e.clientX, e.clientY)) return;
     var fsLike = !!doc.fullscreenElement || winfs.on;
-    var use = (mouse.right && cfg.mouse.rightWheel) || cfg.mouse.wheel === 'always' || (cfg.mouse.wheel === 'fullscreen' && fsLike);
+    var use = (mouse.right && cfg.mouse.rightWheel) || cfg.mouse.wheelVolume === 'always' || (cfg.mouse.wheelVolume === 'fullscreen' && fsLike);
     if (!use) return;
     e.preventDefault();
     e.stopPropagation();
@@ -2490,6 +2761,13 @@
     changeVolume(v, dir * cfg.mouse.volumeStep / 100);
   }, { capture: true, passive: false });
 
+  // Which way a mouse button seeks: -1 back, 1 forward, 0 not bound. The left
+  // and right buttons are never taken over.
+  function seekDir(b) {
+    if (b === 0 || b === 2) return 0;
+    return b === cfg.mouse.seekBackButton ? -1 : b === cfg.mouse.seekFwdButton ? 1 : 0;
+  }
+
   function sideButtonOk(e) {
     if (!on() || cfg.mouse.sideButtons === 'off' || inToolbar(e)) return null;
     var v = targetVideo();
@@ -2504,22 +2782,24 @@
       var v = on() && cfg.mouse.rightWheel ? targetVideo() : null;
       mouse.right = !!(v && overVideoAt(v, e.clientX, e.clientY));
       mouse.rightUsed = false;
-    } else if (e.button === 3 || e.button === 4) {
-      var sv = sideButtonOk(e);
+    } else {
+      var dir = seekDir(e.button);
+      var sv = dir && sideButtonOk(e);
       if (!sv) return;
-      e.preventDefault();
+      e.preventDefault(); // also stops middle-click autoscroll
       e.stopPropagation();
-      seekBy(sv, (e.button === 3 ? -1 : 1) * cfg.playback.seekStep);
+      seekBy(sv, dir * cfg.playback.seekStep);
     }
   }, true);
-  // Back / forward navigation fires on the release; cancel it there too.
+  // Back / forward navigation (and middle-click link opening) fires on the
+  // release; cancel it there too.
   ['mouseup', 'pointerup', 'auxclick'].forEach(function (t) {
     G.addEventListener(t, function (e) {
       if (e.button === 2 && t === 'mouseup') {
         mouse.right = false;
         if (mouse.rightUsed) G.setTimeout(function () { mouse.rightUsed = false; }, 400);
       }
-      if ((e.button === 3 || e.button === 4) && sideButtonOk(e)) { e.preventDefault(); e.stopPropagation(); }
+      if (seekDir(e.button) && sideButtonOk(e)) { e.preventDefault(); e.stopPropagation(); }
     }, true);
   });
   G.addEventListener('contextmenu', function (e) {
@@ -2651,7 +2931,8 @@
       display: { mode: disp.mode, aspect: disp.aspect, zoom: disp.zoom, sx: disp.sx, sy: disp.sy, rot: disp.rot, flip: disp.flip,
         label: dispLabel(), effX: lastT ? lastT.Sx : 1, effY: lastT ? lastT.Sy : 1, cropDetected: !!(crop.cur && crop.v === v), inner: disp.inner, barT: disp.barT, barL: disp.barL, barLink: disp.barLink, cropBlocked: !!(crop.blocked && crop.v === v) || isDrm(v) },
       backdrop: { mode: b.mode, intensity: b.intensity, blur: b.blur, drawing: !!bd.v, visible: bd.visible,
-        blocked: v ? (isDrm(v) ? 'drm' : doc.fullscreenElement === v ? 'bare-fullscreen' : '') : '' },
+        imageLoaded: !!bd.img && bd.imgAt === b.imageAt,
+        blocked: v ? (isDrm(v) && bdFrames(b.mode) ? 'drm' : doc.fullscreenElement === v ? 'bare-fullscreen' : '') : '' },
       picture: picture(),
       toolbar: { enabled: tb.enabled, shown: tb.shown },
       accent: accent(),
@@ -2659,7 +2940,7 @@
       loop: { a: loop.a, b: loop.b }
     };
     if (v) {
-      s.playback = { rate: v.playbackRate, paused: v.paused, volume: v.volume, muted: isMuted(v),
+      s.playback = { rate: v.playbackRate, paused: v.paused, volume: getVolume(v), muted: isMuted(v),
         time: v.currentTime, duration: isFinite(v.duration) ? v.duration : null };
     }
     return s;

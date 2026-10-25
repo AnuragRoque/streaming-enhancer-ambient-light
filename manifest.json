@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QualityLock",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Keeps streams at top quality, plus a floating video toolbar: fill/zoom/aspect, ambient light, picture filters, speed, PiP and mouse controls.",
   "permissions": [
     "storage",

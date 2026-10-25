@@ -54,7 +54,7 @@
   // taken, and qlockMerge drops values of the wrong type.
   var PATCHABLE = {
     picture: ['brightness', 'contrast', 'saturation', 'gamma', 'warmth', 'sharpness', 'grayscale'],
-    backdrop: ['mode', 'intensity', 'blur'],
+    backdrop: ['mode', 'intensity', 'blur', 'rgbEffect', 'rgbColor', 'rgbSpeed'],
     playback: ['speed'],
     toolbar: ['layout']
   };
@@ -90,6 +90,21 @@
     }
     // storage.sync allows ~120 writes a minute; coalesce slider drags.
     if (pending && !patchTimer) patchTimer = setTimeout(flushPatch, 700);
+  });
+
+  // The backdrop picture, sent only when the page asks (image mode is on). It
+  // goes over as a Blob, so the site's CSP (img-src) can't block it.
+  window.addEventListener('message', function (e) {
+    if (e.source !== window || !e.data || e.data.__qlock !== 'needImage') return;
+    chrome.storage.local.get(QLOCK_IMAGE_KEY, function (r) {
+      var im = r && r[QLOCK_IMAGE_KEY];
+      var m = im && typeof im.data === 'string' && /^data:([\w.+\/-]+);base64,(.*)$/.exec(im.data);
+      if (!m) { window.postMessage({ __qlock: 'image', at: 0, blob: null }, ORIGIN); return; }
+      var bin = atob(m[2]);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      window.postMessage({ __qlock: 'image', at: im.at, blob: new Blob([bytes], { type: m[1] }) }, ORIGIN);
+    });
   });
 
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
