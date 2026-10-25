@@ -2,6 +2,9 @@
 // inject.js and player.js keep their own copies because they run in the page,
 // not the extension. Keep the four in step.
 var QLOCK_KEY = 'qlock';
+// The backdrop picture: { data: data URL, at: ms }. In storage.local, as it's far
+// bigger than storage.sync allows.
+var QLOCK_IMAGE_KEY = 'qlockImage';
 
 // Floating toolbar buttons, in default order. `on` is the default visibility.
 var QLOCK_BUTTONS = [
@@ -62,8 +65,13 @@ var QLOCK_DEFAULTS = {
   },
   backdrop: {
     mode: 'off',     // 'off' | 'ambient' (glow from the edges) | 'blur' (blurred copy fills the bars)
+                     // | 'rgb' (LED-strip style light) | 'image' (the user's picture behind the video)
     intensity: 80,   // 0 .. 100
-    blur: 50         // 0 .. 100
+    blur: 50,        // 0 .. 100: softness / glow spread / picture blur
+    rgbEffect: 'wave',   // 'wave' (rainbow chasing around) | 'cycle' (whole strip changes colour) | 'breathe' | 'static'
+    rgbColor: '#8a5cff', // for 'breathe' and 'static'
+    rgbSpeed: 40,        // 1 .. 100
+    imageAt: 0           // when the picture in storage.local (QLOCK_IMAGE_KEY) was set; 0 = none
   },
   playback: {
     speed: 1,

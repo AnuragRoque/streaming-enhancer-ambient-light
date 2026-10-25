@@ -34,6 +34,8 @@ QualityLock does two jobs:
 
 * **Ambient light**: the bars glow with the colours at the picture's edges, so the video blends into them, like YouTube's ambient mode.
 * **Blur fill**: the bars show a soft, blurred copy of the picture, like the background behind a vertical clip on Instagram.
+* **RGB light**: makes the bars glow like an LED strip behind a TV, brightest next to the picture and fading outwards. Effects: **Wave** (a rainbow chasing around the picture), **Cycle** (the whole strip changes colour), **Breathe** and **Static** (your colour, pulsing or steady), with colour presets, a colour picker and a speed slider. It doesn't read the video, so it **works on Netflix, Prime and other DRM sites too**.
+* **Image**: your own picture behind the video, so the bars show its edges. Choose it in the popup (Display tab). It's shrunk to 1920 px and kept in the extension's local storage. Softness blurs it. The picture is drawn inside the web page, so that site's scripts can see it. Don't use a private photo.
 * Intensity and softness sliders. It draws only while there are bars to fill.
 
 ### 🎨 Picture
@@ -79,7 +81,7 @@ Live throughput, data used (and per hour), FPS and dropped frames, buffer ahead,
 
 ## What it can't do
 
-* **Ambient light, blur fill, snapshots, timeline previews and baked-bar detection need to read video frames.** Browsers never let extensions read DRM-protected video (Netflix, Prime Video, Disney+, most paid streams). On those sites, these features show a short notice instead. Fill/zoom/aspect, picture filters, speed, PiP, mouse and everything else still work. YouTube and most free sites are not DRM-protected.
+* **Ambient light, blur fill, snapshots, timeline previews and baked-bar detection need to read video frames.** Browsers never let extensions read DRM-protected video (Netflix, Prime Video, Disney+, most paid streams). On those sites, these features show a short notice instead. RGB light, the Image backdrop, fill/zoom/aspect, picture filters, speed, PiP, mouse and everything else still work. YouTube and most free sites are not DRM-protected.
 * The backdrop sits behind the video, so it's hidden when the **bare `<video>`** element is fullscreen (the browser's built-in video controls). Use the toolbar's fullscreen button instead.
 * The quality lock only works within what the service already sends. It never adds a rendition and doesn't touch DRM. If a site's own quality setting is low (Prime's Good/Better/Best, Hotstar Data Saver, Netflix playback settings), the higher renditions are never sent.
 * Some mouse software (Logitech Options, etc.) sends side buttons as keystrokes. Then the browser handles them before the page sees them.

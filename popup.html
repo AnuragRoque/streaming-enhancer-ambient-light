@@ -61,7 +61,7 @@
         <div class="qa-grid">
           <button type="button" class="qa" id="toggleHudBtn" data-tip="Show or hide the floating toolbar on the video"><i data-icon="toolbar"></i><span>Toolbar</span></button>
           <button type="button" class="qa" id="qaFill" data-tip="Zoom in until the black bars are gone"><i data-icon="fill"></i><span>Hide bars</span></button>
-          <button type="button" class="qa" id="qaBackdrop" data-tip="Cycle ambient light / blur fill for black bars"><i data-icon="backdrop"></i><span id="qaBackdropLabel">Ambient</span></button>
+          <button type="button" class="qa" id="qaBackdrop" data-tip="Cycle the black-bar backdrop: ambient, blur, RGB, image"><i data-icon="backdrop"></i><span id="qaBackdropLabel">Ambient</span></button>
           <button type="button" class="qa" id="qaPip" data-tip="Picture-in-Picture"><i data-icon="pip"></i><span>PiP</span></button>
           <button type="button" class="qa" id="qaWinfs" data-tip="Fill the browser window with the video"><i data-icon="winfs"></i><span>Window</span></button>
           <button type="button" class="qa" id="qaFs" data-tip="Fullscreen"><i data-icon="fullscreen"></i><span>Fullscreen</span></button>
@@ -156,8 +156,38 @@
         <p class="note">Fills the black bars without zooming or cropping the picture — including bars inside the video, set below under “Black bars inside the video”.</p>
         <div class="seg" id="bdMode" role="radiogroup" aria-label="Backdrop">
           <button type="button" data-v="off">Off</button>
-          <button type="button" data-v="ambient" data-tip="Bars glow with the colours at the picture’s edges">Ambient light</button>
-          <button type="button" data-v="blur" data-tip="Bars show a soft, blurred copy of the picture">Blur fill</button>
+          <button type="button" data-v="ambient" data-tip="Bars glow with the colours at the picture’s edges">Ambient</button>
+          <button type="button" data-v="blur" data-tip="Bars show a soft, blurred copy of the picture">Blur</button>
+          <button type="button" data-v="rgb" data-tip="LED-strip style light around the picture. Works on Netflix and Prime too">RGB</button>
+          <button type="button" data-v="image" data-tip="Your own picture behind the video">Image</button>
+        </div>
+        <div class="bd-sub" id="bdRgb" hidden>
+          <div class="chips four" id="rgbEffect" role="radiogroup" aria-label="RGB effect">
+            <button type="button" class="chip" data-v="wave" data-tip="Rainbow chasing around the picture">Wave</button>
+            <button type="button" class="chip" data-v="cycle" data-tip="The whole strip cycles through colours">Cycle</button>
+            <button type="button" class="chip" data-v="breathe" data-tip="Your colour, slowly breathing">Breathe</button>
+            <button type="button" class="chip" data-v="static" data-tip="Your colour, steady">Static</button>
+          </div>
+          <div class="field" id="rgbColorRow">
+            <span>Colour</span>
+            <span class="swatches" id="rgbSwatches"><input type="color" id="rgbColor" aria-label="Light colour"></span>
+          </div>
+          <div class="sl" id="rgbSpeedRow">
+            <label for="rgbSpeed">Speed</label><output id="rgbSpeedVal">40%</output>
+            <input type="range" id="rgbSpeed" min="1" max="100" step="1" value="40">
+          </div>
+        </div>
+        <div class="bd-sub" id="bdImage" hidden>
+          <div class="img-pick">
+            <img id="bdImgPreview" alt="" hidden>
+            <span class="img-empty" id="bdImgEmpty">No picture yet</span>
+            <div class="img-btns">
+              <label class="btn" for="bdImgFile" id="bdImgPick">Choose picture…</label>
+              <input type="file" id="bdImgFile" accept="image/*" hidden>
+              <button type="button" class="link" id="bdImgRemove" hidden>Remove</button>
+            </div>
+          </div>
+          <p class="note" id="bdImgNote">It fills the area behind the video, so the bars show its edges. The picture is drawn inside the web page, which means that site’s scripts can see it. Don’t use a private photo.</p>
         </div>
         <div class="sl">
           <label for="bdIntensity">Intensity</label><output id="bdIntensityVal">80%</output>

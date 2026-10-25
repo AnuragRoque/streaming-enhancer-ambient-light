@@ -382,6 +382,23 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; }
 .field > span small { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); line-height: 1.4; }
 
+/* backdrop: RGB light and picture */
+.bd-sub { display: flex; flex-direction: column; gap: 10px; }
+.chips.four { display: grid; grid-template-columns: repeat(4, 1fr); }
+.chips.four .chip { padding: 0; }
+.swatches { display: flex; align-items: center; gap: 5px; }
+.swatch { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18); }
+.swatch.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent); }
+.swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#rgbColor { width: 30px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
+#rgbColor::-webkit-color-swatch-wrapper { padding: 2px; }
+#rgbColor::-webkit-color-swatch { border: 0; border-radius: 4px; }
+.img-pick { display: flex; align-items: center; gap: 12px; }
+#bdImgPreview, .img-empty { width: 112px; height: 63px; flex: none; border-radius: 9px; object-fit: cover; background: var(--soft); border: 1px solid var(--line); }
+.img-empty { display: grid; place-items: center; font-size: 11px; color: var(--faint); }
+.img-btns { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.img-btns .btn { cursor: pointer; }
+
 /* mouse-button binding: click, then press the button */
 .bind {
   height: 30px;
