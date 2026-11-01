@@ -106,7 +106,11 @@ function runWithGesture(tabId, frameId, action) {
     world: 'MAIN',
     func: function (a) { window.postMessage({ __qlock: 'player', action: a }, '*'); },
     args: [action]
-  }).catch(function () { /* page not scriptable (chrome://, store) */ });
+  }).catch(function () {
+    // Not scriptable: chrome://, the store, or our own player page (local.html),
+    // which still takes a message, though without the gesture the browser may refuse.
+    return sendToFrame(tabId, frameId, { type: 'qlock:player', action: action, params: null });
+  });
 }
 
 if (chrome.commands && chrome.commands.onCommand) chrome.commands.onCommand.addListener(function (command, tab) {
@@ -146,6 +150,18 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // The top frame started a new document, so every old frame id is gone.
   if (msg.type === 'qlock:frameReset' && sender.tab && sender.frameId === 0) {
     updateFrames(sender.tab.id, function (f) { for (var k in f) delete f[k]; });
+    return false;
+  }
+
+  // A video opened straight from disk: play it in the player page, next to its tab.
+  if (msg.type === 'qlock:openPlayer' && sender.tab && /^file:/i.test(sender.url || '')) {
+    var name = typeof msg.name === 'string' ? msg.name.slice(0, 200) : '';
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('local.html') + (name ? '#' + encodeURIComponent(name) : ''),
+      windowId: sender.tab.windowId,
+      index: sender.tab.index + 1,
+      openerTabId: sender.tab.id
+    });
     return false;
   }
 

@@ -42,7 +42,10 @@
       <div class="card now" id="now" aria-live="polite">
         <div class="now-empty" id="nowEmpty">
           <i data-icon="now" class="empty-ic"></i>
-          <p><strong>No video here yet</strong><br>Open a video or streaming site and start playing — controls appear here and on the video.</p>
+          <div class="empty-body">
+            <p><strong>No video here yet</strong><br>Open a video or streaming site and start playing — controls appear here and on the video.</p>
+            <button type="button" class="btn" id="playLocal">Play a file from your computer</button>
+          </div>
         </div>
         <div class="now-live" id="nowLive" hidden>
           <div class="now-head">
@@ -61,6 +64,11 @@
           <p class="detail" id="nowKept"></p>
           <p class="warn" id="nowWarn" hidden></p>
         </div>
+      </div>
+
+      <div class="card" id="localCard" hidden>
+        <p class="note">This video is open straight from your computer. Chrome doesn’t let extensions read its frames here, so Auto black bars, ambient light, blur fill and snapshots need the QualityLock player.</p>
+        <button type="button" class="btn primary" id="openPlayer">Open in QualityLock player</button>
       </div>
 
       <div class="card">

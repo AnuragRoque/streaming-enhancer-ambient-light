@@ -54,7 +54,8 @@
       netflix: 'Netflix',
       prime: 'Prime Video',
       hotstar: 'JioHotstar',
-      other: (G.location && G.location.hostname ? G.location.hostname.replace(/^www\./, '') : 'Web Video')
+      other: G.location && G.location.protocol === 'chrome-extension:' ? 'QualityLock player'
+        : (G.location && G.location.hostname ? G.location.hostname.replace(/^www\./, '') : 'Web Video')
     };
 
     function detectSite(host) {
@@ -1057,7 +1058,8 @@
       var showToast = toastText && Date.now() < toastUntil;
       var v = mainVideo();
       var res = v && v.videoHeight ? v.videoWidth + 'x' + v.videoHeight : '';
-      if (res && res !== lastRes) flashUntil = Date.now() + 6000;
+      // Not on QualityLock's own player page (local files): there's no stream to lock.
+      if (res && res !== lastRes && G.location.protocol !== 'chrome-extension:') flashUntil = Date.now() + 6000;
       lastRes = res;
       var always = !!settings.overlay !== keyToggled;
       var wanted = showToast || (res && (always || Date.now() < flashUntil));
@@ -1086,8 +1088,12 @@
     // a fullscreen <video> can't hold children at all. Showing our panels as manual
     // popovers puts them in the top layer as well, after (so above) the fullscreen
     // element. Without popover support, fall back to appending inside it.
+    // While something is fullscreen, Chrome also ignores clicks on everything
+    // outside it, popovers included, so the panels go inside the fullscreen
+    // element when it can hold children (not a bare <video> or an iframe).
     var canPopover = typeof HTMLElement !== 'undefined' && 'popover' in HTMLElement.prototype;
     var topLayerEls = [];
+    var LEAF_FS = /^(VIDEO|AUDIO|IFRAME|IMG|CANVAS|OBJECT|EMBED)$/;
 
     function fallbackHost() {
       var fs = doc.fullscreenElement;
@@ -1098,12 +1104,20 @@
       return doc.body || doc.documentElement;
     }
 
+    function popoverRoot() {
+      var fs = doc.fullscreenElement;
+      return fs && !LEAF_FS.test(fs.tagName) ? fs : doc.body || doc.documentElement;
+    }
+
     function mountOnTop(el) {
       if (canPopover) {
-        var root = doc.body || doc.documentElement;
+        var root = popoverRoot();
         if (!root) return false;
         if (!el.hasAttribute('popover')) el.setAttribute('popover', 'manual');
         if (el.parentNode !== root) root.appendChild(el);
+        // A web-component player's shadow root may not slot us in, which would
+        // leave us unrendered: then the page body (visible, just not clickable).
+        if (root.shadowRoot && !el.assignedSlot && doc.body && root !== doc.body) doc.body.appendChild(el);
         if (!el.matches(':popover-open')) { try { el.showPopover(); } catch (e) { /* not connected */ } }
       } else {
         var host = fallbackHost();
@@ -1115,15 +1129,13 @@
     }
 
     // Entering fullscreen pushes the fullscreen element above our open popovers;
-    // re-showing them moves them back to the top of the stack.
+    // re-showing them moves them back to the top of the stack, and into (or back
+    // out of) the fullscreen element.
     function raiseTopLayer() {
       topLayerEls.forEach(function (el) {
         if (!el.isConnected) return;
-        if (!canPopover) { mountOnTop(el); return; }
-        try {
-          if (el.matches(':popover-open')) el.hidePopover();
-          el.showPopover();
-        } catch (e) { /* ignore */ }
+        if (canPopover) { try { if (el.matches(':popover-open')) el.hidePopover(); } catch (e) { /* ignore */ } }
+        mountOnTop(el);
       });
     }
 

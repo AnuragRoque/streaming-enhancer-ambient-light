@@ -476,6 +476,7 @@
     var pl = player;
     var has = !!(pl && pl.hasVideo);
     ['toggleHudBtn', 'qaFill', 'qaBackdrop', 'qaPip', 'qaWinfs', 'qaFs', 'qaLights', 'qaSnap'].forEach(function (id) { $(id).disabled = !has; });
+    $('localCard').hidden = !(has && pl.local);
     if (!pl) {
       $('nowMode').hidden = true;
       $('ctrlModeTag').textContent = 'No video';
@@ -516,6 +517,7 @@
     innerNote.textContent = inner === -2 ? 'Fill zooms past these bars; ambient / blur fill paints over them.'
       : inner > 0 ? 'Treating everything outside a ' + inner + ':1 picture as bars (Fill zooms past them, the backdrop covers them).'
       : inner === -1 ? 'Nothing inside the video is treated as bars.'
+      : d.cropBlocked && pl.local ? 'Chrome doesn’t let extensions read the frames of a file opened from your computer. Open it in the QualityLock player (Now tab), or pick the film’s shape.'
       : d.cropBlocked ? 'This site doesn’t let extensions read its frames, so Auto can’t see these bars. Pick the film’s shape.'
       : d.cropDetected ? 'Detected and removed.' : 'Auto checks the picture while Fill or Stretch is on.';
     var note = 'Showing ' + Math.round(d.effX * 100) + '% × ' + Math.round(d.effY * 100) + '% of the player’s size.';
@@ -588,6 +590,9 @@
   $('qaWinfs').addEventListener('click', function () { act('winfs'); });
   $('qaLights').addEventListener('click', function () { act('lights'); });
   $('qaSnap').addEventListener('click', function () { act('snapshot'); });
+  // Local files: the player page, empty, or (from a file:// tab) asking for that file.
+  $('playLocal').addEventListener('click', function () { chrome.tabs.create({ url: chrome.runtime.getURL('local.html') }); });
+  $('openPlayer').addEventListener('click', function () { act('openPlayer'); });
 
   // ---------------------------------------------------------------- DISPLAY tab
   onSeg('dispMode', function (m) { act('setMode', { mode: m }); });

@@ -204,6 +204,21 @@
     try { G.postMessage({ __qlock: 'patch', patch: patch }, selfOrigin()); } catch (e) { /* ignore */ }
   }
 
+  // A video opened straight from disk (file://). Chrome doesn't let extensions
+  // read its frames there, and its video page has no room around the picture,
+  // so the QualityLock player page (local.html) offers to play the file instead.
+  var LOCAL_FILE = G.location.protocol === 'file:';
+  // The QualityLock player page (local.html) has its own controls; there the
+  // toolbar shows only when asked for (its QualityLock button, Alt+Z).
+  var OWN_PLAYER = !!(doc.documentElement && doc.documentElement.hasAttribute('data-qlock-player'));
+  function openLocalPlayer() {
+    var v = targetVideo();
+    if (v && !v.paused) togglePlay(v);
+    var name = '';
+    try { name = decodeURIComponent(G.location.pathname.split('/').pop() || ''); } catch (e) { /* ignore */ }
+    try { G.postMessage({ __qlock: 'openPlayer', name: name }, selfOrigin()); } catch (e) { /* ignore */ }
+  }
+
   // Command shortcuts (chrome://extensions/shortcuts), passed along with commands.
   var keys = {};
 
@@ -1522,19 +1537,54 @@
   }
   function requestFs(v, box) {
     var target = box.el || v;
+    // Nothing over a bare fullscreen <video> can be clicked (Chrome ignores
+    // clicks outside the fullscreen element), so the video fills the window and
+    // the whole page goes fullscreen instead. It looks the same.
+    var fill = target === v && !!doc.documentElement;
+    if (fill) { winfsOn(v, true); target = doc.documentElement; }
     var p = target.requestFullscreen ? target.requestFullscreen({ navigationUI: 'hide' }) : null;
     if (p && p.catch) {
-      p.catch(function () { osd('Fullscreen blocked', 'Use the toolbar button or the site’s own button', 'fullscreen'); });
+      p.catch(function () {
+        if (fill) winfsOff();
+        osd('Fullscreen blocked', 'Use the toolbar button or the site’s own button', 'fullscreen');
+      });
     }
   }
 
-  var winfs = { on: false, player: null, video: null, restores: [], check: 0 };
-  function winfsOn(v) {
+  // Chrome's own page for a video opened by itself (a file, a direct link): just
+  // the <video> with the browser's controls, which fullscreen the bare video.
+  function isMediaDoc(v) {
+    return !!v && v.getAttribute('name') === 'media' && v.parentElement === doc.body && doc.body.firstElementChild === v;
+  }
+  // Going fullscreen there uses up the click, so it can't be swapped for the
+  // page-level fullscreen afterwards. Instead its fullscreen button is hidden and
+  // double-click is handled here.
+  var mediaDocV = null;
+  function mediaDocControls(v) {
+    var want = on() && isMediaDoc(v) ? v : null;
+    if (mediaDocV === want) return;
+    try {
+      if (mediaDocV) mediaDocV.controlsList.remove('nofullscreen');
+      if (want) want.controlsList.add('nofullscreen');
+    } catch (e) { /* no controlsList */ }
+    mediaDocV = want;
+  }
+  G.addEventListener('dblclick', function (e) {
+    if (!mediaDocV || e.target !== mediaDocV || !on()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFullscreen(mediaDocV);
+  }, true);
+
+  // forFs: filling the window under a page-level fullscreen (requestFs), which
+  // ends with that fullscreen.
+  var winfs = { on: false, forFs: false, player: null, video: null, restores: [], check: 0 };
+  function winfsOn(v, forFs) {
     if (!v || winfs.on) return;
-    if (doc.fullscreenElement) { doc.exitFullscreen().catch(noop); }
+    if (doc.fullscreenElement && !forFs) { doc.exitFullscreen().catch(noop); }
     var box = playerBox(v);
     var p = box.el || v;
-    winfs.on = true; winfs.player = p; winfs.video = v; winfs.restores = [];
+    winfs.on = true; winfs.forFs = !!forFs; winfs.player = p; winfs.video = v; winfs.restores = [];
     var R = winfs.restores;
     R.push(pinStyles(p, {
       position: 'fixed', left: '0', top: '0', right: '0', bottom: '0',
@@ -1570,13 +1620,13 @@
       requestApply();
     }, 450);
     applyAll(); refreshUi();
-    osd('Filling the browser window', 'Press Esc to go back', 'winfs');
+    if (!forFs) osd('Filling the browser window', 'Press Esc to go back', 'winfs');
   }
   function winfsOff() {
     if (!winfs.on) return;
     if (winfs.check) { G.clearTimeout(winfs.check); winfs.check = 0; }
     for (var i = winfs.restores.length - 1; i >= 0; i--) { try { winfs.restores[i](); } catch (e) { /* ignore */ } }
-    winfs = { on: false, player: null, video: null, restores: [], check: 0 };
+    winfs = { on: false, forFs: false, player: null, video: null, restores: [], check: 0 };
     fireResize();
     applyAll(); refreshUi();
   }
@@ -1681,7 +1731,8 @@
         osd('Snapshot saved', name, 'snapshot');
       }, 'image/png');
     } catch (e) {
-      osd('Snapshot blocked', 'The site serves this video from another origin', 'snapshot');
+      osd('Snapshot blocked', LOCAL_FILE ? 'Chrome blocks this for files opened from your computer. Open it in the QualityLock player (toolbar → Display)'
+        : 'The site serves this video from another origin', 'snapshot');
     }
   }
 
@@ -1702,7 +1753,8 @@
     },
     direct: function (v) {
       var s = v.currentSrc || '';
-      return !v.srcObject && /^https?:/i.test(s);
+      // blob: is usually MSE, but the player page marks a file's blob, which can be opened twice.
+      return !v.srcObject && (/^https?:/i.test(s) || (/^blob:/i.test(s) && v.hasAttribute('data-qlock-file')));
     },
     sample: function (v) {
       if (!v || v.paused || v.readyState < 2 || isDrm(v) || this.direct(v) || !G.createImageBitmap) return;
@@ -2016,8 +2068,8 @@
 
   var tb = {
     host: null, root: null, w: null, bar: null, row: null, tl: null, btn: {}, panel: null, panelId: '', panelApi: null,
-    tip: null, tipTimer: 0, tipFor: null, enabled: cfg.toolbar.show !== 'manual', shown: false, force: 0,
-    drag: null, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false,
+    tip: null, tipTimer: 0, tipFor: null, enabled: cfg.toolbar.show !== 'manual' && !OWN_PLAYER, shown: false, force: 0,
+    drag: null, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false, forPanel: false,
     pos: { fx: 0.5, fy: 0.035 }
   };
   try {
@@ -2123,8 +2175,10 @@
       onclick: function () { disp.barLink = !disp.barLink; if (disp.barLink) setBars(disp.barT, disp.barT, true); saveDisp(); refreshUi(); } }, ['Link top/bottom and left/right']);
     var manual = h('div', { style: 'display:flex;flex-direction:column;gap:9px' }, [top.el, side.el, link]);
     var note = h('div', { class: 'note' });
+    var openLocal = LOCAL_FILE ? h('button', { type: 'button', class: 'sbtn', text: 'Open in QualityLock player',
+      title: 'Play this file in QualityLock’s own page, where Auto bars, ambient light, blur fill and snapshots work', onclick: openLocalPlayer }) : null;
     return {
-      el: h('div', { style: 'display:flex;flex-direction:column;gap:9px' }, [h('div', { class: 'sl' }, [h('label', { text: 'Black bars inside the video' })]), row, manual, note]),
+      el: h('div', { style: 'display:flex;flex-direction:column;gap:9px' }, [h('div', { class: 'sl' }, [h('label', { text: 'Black bars inside the video' })]), row, manual, note, openLocal]),
       update: function () {
         els.forEach(function (c) { c.classList.toggle('on', c.__i === disp.inner); });
         manual.style.display = disp.inner === -2 ? 'flex' : 'none';
@@ -2136,6 +2190,7 @@
         note.textContent = disp.inner === -2 ? 'Fill zooms past these; the backdrop paints over them.'
           : disp.inner > 0 ? 'Treating everything outside a ' + aspectName(disp.inner) + ' picture as bars.'
           : disp.inner === -1 ? 'Nothing inside the video is treated as bars.'
+          : blocked && LOCAL_FILE ? 'Chrome doesn’t let extensions read the frames of a file opened from your computer, so Auto can’t see these bars. Open it in the QualityLock player, or pick the film’s shape or Manual.'
           : blocked ? 'This site doesn’t let extensions read its frames, so Auto can’t see these bars. Pick the film’s shape or Manual.'
           : crop.cur && crop.v === vv ? 'Detected automatically.' : 'Auto checks the picture while Fill, Stretch or the backdrop is on.';
         note.classList.toggle('warn', disp.inner === 0 && !!blocked);
@@ -2243,6 +2298,7 @@
           : 'Fills only the black bars, so the picture itself is never zoomed or cropped.';
         var warnMsg = '';
         if (v && isDrm(v) && bdFrames(c.mode)) warnMsg = 'This video is DRM-protected (Netflix, Prime and similar): browsers don’t let extensions read its frames, so ambient light and blur fill can’t be drawn. RGB light and Image still work.';
+        else if (LOCAL_FILE && bdFrames(c.mode)) warnMsg = 'This file is open straight from your computer: Chrome’s video page leaves no room around the picture and doesn’t let extensions read its frames. Open it in the QualityLock player (below), which fills the window.';
         else if (v && doc.fullscreenElement === v && c.mode !== 'off') warnMsg = 'The bare video is fullscreen, which hides everything behind it. Use the toolbar’s fullscreen button instead.';
         else if (c.mode === 'image' && !c.imageAt) warnMsg = 'No picture yet. Choose one in the QualityLock popup → Display → Black bar backdrop.';
         else if (c.mode !== 'off' && !bd.visible && bd.v) msg = 'No black bars right now — the picture already fills the player.';
@@ -2315,6 +2371,7 @@
     hideTip();
   }
   function closePanel() {
+    if (tb.forPanel) { tb.forPanel = false; tb.enabled = false; }
     if (tb.panel && tb.panel.parentNode) tb.panel.parentNode.removeChild(tb.panel);
     if (tb.panelId && tb.btn[tb.panelId]) tb.btn[tb.panelId].classList.remove('open');
     tb.panel = null; tb.panelId = ''; tb.panelApi = null;
@@ -2901,6 +2958,16 @@
       case 'pictureLive': if (p && p.picture) setPicture(p.picture, false); return;
       case 'pictureCompare': pictureBypass = !!(p && p.on); applyAll(); return;
       case 'backdropLive': if (p && p.backdrop) setBackdrop(p.backdrop, false, true); return;
+      case 'setBackdrop': if (p && p.backdrop && typeof p.backdrop === 'object') setBackdrop(p.backdrop, true); return;
+      case 'panel':
+        // One toolbar panel on its own (the player page's settings menu). The
+        // toolbar goes away again with the panel if it was off.
+        if (!p || !PANELS[p.id]) return;
+        var wasOff = !tb.enabled;
+        if (wasOff) setToolbar(true, true);
+        if (tb.panelId !== p.id) openPanel(p.id);
+        if (wasOff) tb.forPanel = true;
+        return;
       case 'cycleBackdrop': cycleBackdrop(); return;
       case 'setSpeed': setSpeed(num(p, 'speed', 1), !!(p && p.quiet)); return;
       case 'speedUp': stepSpeed(1); return;
@@ -2911,6 +2978,9 @@
       case 'togglePlay': togglePlay(v); return;
       case 'toggleMute': toggleMute(v); return;
       case 'setVolume': setVolume(v, num(p, 'volume', 1), true); return;
+      case 'volumeUp': if (v) setVolume(v, Math.round((getVolume(v) + cfg.mouse.volumeStep / 100) * 100) / 100); return;
+      case 'volumeDown': if (v) setVolume(v, Math.round((getVolume(v) - cfg.mouse.volumeStep / 100) * 100) / 100); return;
+      case 'openPlayer': if (LOCAL_FILE) openLocalPlayer(); return;
       case 'pip': togglePip(v); return;
       case 'fullscreen': toggleFullscreen(v); return;
       case 'winfs': toggleWinfs(v); return;
@@ -2928,6 +2998,7 @@
     var s = {
       hasVideo: !!v,
       drm: isDrm(v),
+      local: LOCAL_FILE,
       display: { mode: disp.mode, aspect: disp.aspect, zoom: disp.zoom, sx: disp.sx, sy: disp.sy, rot: disp.rot, flip: disp.flip,
         label: dispLabel(), effX: lastT ? lastT.Sx : 1, effY: lastT ? lastT.Sy : 1, cropDetected: !!(crop.cur && crop.v === v), inner: disp.inner, barT: disp.barT, barL: disp.barL, barLink: disp.barLink, cropBlocked: !!(crop.blocked && crop.v === v) || isDrm(v) },
       backdrop: { mode: b.mode, intensity: b.intensity, blur: b.blur, drawing: !!bd.v, visible: bd.visible,
@@ -2952,7 +3023,7 @@
     refreshCfg();
     if (livePicture && (now() - livePictureAt > 2500 || JSON.stringify(livePicture) === JSON.stringify(cfg.picture))) livePicture = null;
     if (liveBackdrop && (now() - liveBackdropAt > 2500 || JSON.stringify(liveBackdrop) === JSON.stringify(cfg.backdrop))) liveBackdrop = null;
-    if (cfg.toolbar.show !== prevShow) tb.enabled = cfg.toolbar.show !== 'manual';
+    if (cfg.toolbar.show !== prevShow) tb.enabled = cfg.toolbar.show !== 'manual' && !OWN_PLAYER;
     if (cfg.display.rememberPerSite && !prevRemember) saveDisp();
     if (!cfg.display.rememberPerSite && prevRemember) { try { G.localStorage.removeItem(DISP_KEY); } catch (e) { /* ignore */ } }
     if (!on()) { winfsOff(); lightsOff(); setIdleCursor(false); }
@@ -2977,12 +3048,22 @@
   core.hooks.snapshot = snapshotState;
   core.hooks.fullscreen = function () {
     closePanel();
-    if (doc.fullscreenElement && winfs.on) winfsOff();
+    var fs = doc.fullscreenElement;
+    if (winfs.on && (winfs.forFs ? !fs : !!fs)) winfsOff();
+    // Chrome's video page puts the bare <video> in fullscreen (double-click, its
+    // own button), where the toolbar can't be clicked. Swap in the page-level
+    // fullscreen while the click still counts as a user gesture.
+    var act = G.navigator.userActivation;
+    if (fs && !winfs.on && on() && isMediaDoc(fs) && act && act.isActive) {
+      winfsOn(fs, true);
+      doc.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(function () { winfsOff(); });
+    }
     applyAll();
     tbUpdate(true);
   };
   core.hooks.tick = function () {
     tickN++;
+    mediaDocControls(targetVideo());
     if (tickN % 5 === 0 && tb.shown) refreshDynamic();
     applyAll();
     if (disp.mode === 'fill' || disp.mode === 'stretch' || backdrop().mode !== 'off') cropSample(targetVideo());

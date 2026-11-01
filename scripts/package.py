@@ -1,7 +1,8 @@
 """Builds the Chrome Web Store upload: dist/<short_name>-<version>.zip
 
 Only files the extension uses go in: what manifest.json points at (background,
-content scripts, popup, icons), what popup.html loads, and _locales/ if present.
+content scripts, popup, icons), the extension's own pages (EXTRA_PAGES) and what
+those pages load, and _locales/ if present.
 Docs, tests, the web site and tooling stay out.
 
 It stops before zipping if something would get the upload rejected or ship a
@@ -16,6 +17,8 @@ from html.parser import HTMLParser
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, 'dist')
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)  # same bytes for the same sources
+# Pages the extension opens itself (chrome.runtime.getURL), which the manifest doesn't name.
+EXTRA_PAGES = ['local.html']
 
 
 def fail(msg):
@@ -65,7 +68,7 @@ def main():
     files.update((m.get('icons') or {}).values())
     action = m.get('action') or {}
     files.update((action.get('default_icon') or {}).values())
-    for page in [action.get('default_popup'), m.get('options_page')]:
+    for page in [action.get('default_popup'), m.get('options_page')] + EXTRA_PAGES:
         if not page: continue
         files.add(page)
         refs = Refs()

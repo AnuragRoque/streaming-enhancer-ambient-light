@@ -19,7 +19,7 @@ QualityLock does two jobs:
 * **Drag** it anywhere by the grip. It remembers its spot per site and stays in place relative to the player.
 * **Glass**, **Dark** and **Light** themes. Every button has a tooltip that shows its shortcut.
 * **Choose and reorder the buttons** in the popup (Settings → Toolbar buttons).
-* Works in fullscreen, including when the bare `<video>` is the fullscreen element, and inside embedded iframe players.
+* **Clickable in fullscreen.** While something is fullscreen, Chrome ignores clicks outside it, so the toolbar moves inside the fullscreen player (and back out after). A bare `<video>` can't hold anything, so QualityLock's own fullscreen fills the window with the video and puts the whole page in fullscreen instead; on Chrome's own video page, double-click does the same. Also works inside embedded iframe players.
 
 ### 🖼️ Display: fit, fill, aspect ratio, zoom, rotate
 
@@ -67,6 +67,17 @@ QualityLock does two jobs:
 * **Mouse buttons seek** −/+ the seek step inside the video instead of leaving the page. By default, the back/forward side buttons do this. To change which buttons, click *Seek back* or *Seek forward* in the popup and press any mouse button (a side button, the wheel click or an extra button). Choose *over the video* (default) or *anywhere on the page*.
 * Scrolling up on a muted video unmutes it at its previous level.
 
+### 📂 Videos from your computer
+
+A movie dragged into the browser plays from `file://`, where Chrome doesn't let extensions read its frames, and Chrome's own video page has no room around the picture. So Auto black bars, ambient light, blur fill and snapshots can't work there. **The QualityLock player** (`local.html`) is a full player for your own files: they play from your disk (nothing is uploaded) with every QualityLock feature working.
+
+* **Open it** from the popup (**Now → Play a file from your computer**), or from a `file://` tab: **Open in QualityLock player** in the toolbar's Display / Backdrop panel or the popup. It opens next to the tab, pauses the original and asks for that file by name. Chrome never gives extensions the file itself, so you pick it (or its folder) once more.
+* **Playlists**: choose several videos, or open / drop a folder (sub-folders such as seasons too), sorted the natural way (E2 before E10). **Next / previous** buttons, a playlist menu, and the next video starts when one ends.
+* **Its own controls**: big centre play / pause with ±10 s and next / previous, a seek bar with thumbnail previews and live scrubbing, volume up to **200% (boost)**, speed menu, Picture-in-Picture and fullscreen. They show when the mouse moves and stay while you're on them or paused; a few seconds after the mouse stops they hide along with the cursor. Click the picture to play / pause, double-click for fullscreen; everything stays clickable in fullscreen.
+* **Settings menu**: picture size (Fit, Fill, Stretch, 16:9, 21:9, 4:3), black bars (ambient, blur, RGB light), and QualityLock's zoom, picture and backdrop panels. The QualityLock button top right brings up the full toolbar.
+* **Resumes** each movie where you left it, with *Start over*. Warns when a movie plays without sound because Chrome can't decode its audio (AC-3, E-AC-3, DTS).
+* Keys: <kbd>Space</kbd>/<kbd>K</kbd> play, <kbd>←</kbd><kbd>→</kbd> (<kbd>J</kbd>/<kbd>L</kbd>) seek, <kbd>↑</kbd><kbd>↓</kbd> volume, <kbd>M</kbd> mute, <kbd>F</kbd> fullscreen, <kbd>N</kbd>/<kbd>P</kbd> next / previous, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> speed, <kbd>0</kbd>–<kbd>9</kbd> jump, <kbd>O</kbd> open. Media keys and all the extension shortcuts work too.
+
 ### 🔒 Quality lock (the original feature)
 
 * Intercepts DASH (`.mpd`), HLS (`.m3u8`) and Netflix JSON manifests (fetch, XHR, `JSON.parse`, `Response.json`; optional *Deep mode* for players that fetch in a Web Worker).
@@ -82,7 +93,8 @@ Live throughput, data used (and per hour), FPS and dropped frames, buffer ahead,
 ## What it can't do
 
 * **Ambient light, blur fill, snapshots, timeline previews and baked-bar detection need to read video frames.** Browsers never let extensions read DRM-protected video (Netflix, Prime Video, Disney+, most paid streams). On those sites, these features show a short notice instead. RGB light, the Image backdrop, fill/zoom/aspect, picture filters, speed, PiP, mouse and everything else still work. YouTube and most free sites are not DRM-protected.
-* The backdrop sits behind the video, so it's hidden when the **bare `<video>`** element is fullscreen (the browser's built-in video controls). Use the toolbar's fullscreen button instead.
+* The same goes for **videos opened from your computer in their own tab** (`file://`): Chrome blocks reading their frames. Use the QualityLock player instead (see *Videos from your computer*). Shortcuts for PiP and fullscreen may be refused there, because Chrome doesn't let extensions inject into their own pages to pass on the key press; use <kbd>F</kbd> or the toolbar.
+* When a site's own button puts the **bare `<video>`** in fullscreen, nothing can sit over it: the backdrop is hidden and the toolbar can't be clicked. Use the toolbar's fullscreen button instead.
 * The quality lock only works within what the service already sends. It never adds a rendition and doesn't touch DRM. If a site's own quality setting is low (Prime's Good/Better/Best, Hotstar Data Saver, Netflix playback settings), the higher renditions are never sent.
 * Some mouse software (Logitech Options, etc.) sends side buttons as keystrokes. Then the browser handles them before the page sees them.
 
@@ -148,7 +160,7 @@ Updating: replace the files and press the reload icon on the extension's card. N
 python scripts/package.py     # -> dist/qualitylock-<version>.zip, the Chrome Web Store upload
 ```
 
-The packager puts in only what `manifest.json` and `popup.html` reference (plus `_locales/` if present), so docs, tests, `web/` and tooling never ship. It refuses to build if the name, short name or description is over the store's limits, or if the `VERSION` constants in `inject.js` / `player.js` don't match the manifest. Before each release, bump all three.
+The packager puts in only what `manifest.json`, `popup.html` and the extension's own pages (`EXTRA_PAGES`: `local.html`) reference (plus `_locales/` if present), so docs, tests, `web/` and tooling never ship. It refuses to build if the name, short name or description is over the store's limits, or if the `VERSION` constants in `inject.js` / `player.js` don't match the manifest. Before each release, bump all three.
 
 - `store/LISTING.md`: the store listing text, single-purpose statement, permission justifications, privacy answers and reviewer test steps, ready to paste into the dashboard.
 - `web/`: the product page and the privacy policy (static HTML, no scripts or external requests). `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to `main` that touches `web/`. One-time setup: repo **Settings → Pages → Source: GitHub Actions**.
@@ -172,6 +184,9 @@ extension/
 ├── player.js       Page script (MAIN world): floating toolbar, display engine, backdrop, picture filters,
 │                   speed, timeline previews, A-B loop, snapshot, PiP, window fill, lights off, mouse, OSD
 ├── popup.html/css/js  Tabbed popup
+├── local.html/css/js  QualityLock player for files from your computer: its own controls, playlists from
+│                      files / folders, volume boost, resume; files play from blob: URLs. Loads defaults,
+│                      bridge, inject and player.js like a site gets them (player.js keeps its toolbar out of the way there)
 ├── icons/
 ├── scripts/package.py  Builds the store zip (not shipped)
 ├── store/LISTING.md    Store dashboard copy (not shipped)

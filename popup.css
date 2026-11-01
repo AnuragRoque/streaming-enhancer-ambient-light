@@ -183,6 +183,7 @@ kbd {
 /* ---------- now */
 .now-empty { display: flex; gap: 12px; align-items: center; color: var(--muted); }
 .now-empty strong { color: var(--ink); }
+.empty-body { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
 .empty-ic { color: var(--faint); flex: none; }
 .empty-ic svg { width: 34px; height: 34px; display: block; }
 .now-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; }

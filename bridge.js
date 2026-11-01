@@ -121,6 +121,15 @@
     });
   });
 
+  // A video opened straight from disk asks to be played in the player page
+  // instead. Only file:// pages, so a website can't make us open tabs.
+  if (location.protocol === 'file:') {
+    window.addEventListener('message', function (e) {
+      if (e.source !== window || !e.data || e.data.__qlock !== 'openPlayer') return;
+      toBackground({ type: 'qlock:openPlayer', name: String(e.data.name || '').slice(0, 200) });
+    });
+  }
+
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (!msg || typeof msg !== 'object') return false;
 
