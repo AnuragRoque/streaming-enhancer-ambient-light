@@ -75,8 +75,21 @@ A movie dragged into the browser plays from `file://`, where Chrome doesn't let 
 * **Playlists**: choose several videos, or open / drop a folder (sub-folders such as seasons too), sorted the natural way (E2 before E10). **Next / previous** buttons, a playlist menu, and the next video starts when one ends.
 * **Its own controls**: big centre play / pause with ±10 s and next / previous, a seek bar with thumbnail previews and live scrubbing, volume up to **200% (boost)**, speed menu, Picture-in-Picture and fullscreen. They show when the mouse moves and stay while you're on them or paused; a few seconds after the mouse stops they hide along with the cursor. Click the picture to play / pause, double-click for fullscreen; everything stays clickable in fullscreen.
 * **Settings menu**: picture size (Fit, Fill, Stretch, 16:9, 21:9, 4:3), black bars (ambient, blur, RGB light), and QualityLock's zoom, picture and backdrop panels. The QualityLock button top right brings up the full toolbar.
-* **Resumes** each movie where you left it, with *Start over*. Warns when a movie plays without sound because Chrome can't decode its audio (AC-3, E-AC-3, DTS).
-* Keys: <kbd>Space</kbd>/<kbd>K</kbd> play, <kbd>←</kbd><kbd>→</kbd> (<kbd>J</kbd>/<kbd>L</kbd>) seek, <kbd>↑</kbd><kbd>↓</kbd> volume, <kbd>M</kbd> mute, <kbd>F</kbd> fullscreen, <kbd>N</kbd>/<kbd>P</kbd> next / previous, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> speed, <kbd>0</kbd>–<kbd>9</kbd> jump, <kbd>O</kbd> open. Media keys and all the extension shortcuts work too.
+* **Audio tracks in MKV files** (CC button, <kbd>A</kbd>): every audio track is listed with its language, name, format and channels, e.g. *Hindi BD 5.1 · Dolby Digital 5.1* or *English · AAC 7.1*. Picking one switches to it at the same moment, playing or paused, and each movie remembers its choice. Chrome on its own only ever plays the first audio track it can decode. To switch, the player reloads the file with the other tracks' codec names changed by one letter, so Chrome skips them. This happens in memory, without copying the file. Without a saved choice, the track the file marks as default plays, as in other players.
+  * **Dolby Digital (AC-3) and Dolby Digital Plus (E-AC-3)**, which Chrome can't decode, are decoded by the player. It uses FFmpeg's decoder compiled to WebAssembly (`vendor/ac3`), in a worker. The track is read from the file a few seconds ahead and played through Web Audio in step with the picture: lined up again on play, seek, stalls and speed changes, or if they drift 60 ms apart. 5.1 and 7.1 are mixed down to your speakers. The volume, boost and mute apply as usual. If the decoder fails, the player says so and plays a track Chrome can play. DTS and TrueHD are still dimmed, with the reason.
+* **Subtitles** (CC button, <kbd>C</kbd>):
+  * **Inside MKV files**: text subtitle tracks (SRT, ASS/SSA, WebVTT) are listed with their language and name. The file's forced or default track comes on by itself. They are read through the file's index in a moment. A file without an index is read through, with lines showing as it goes, at roughly a minute for a 20 GB file on an SSD. Blu-ray picture subtitles (PGS) are drawn as on the disc. The disc's 16:9 frame is laid over the picture, so in a movie cropped to 2.40:1 they sit in the black bar below it. They move above the control bar while it shows, and Size scales them. DVD picture subtitles (VobSub) are listed but can't be shown.
+  * `.srt`, `.vtt`, `.ass` and `.ssa`. Files next to a video with the same name (`Movie.srt`, `Movie.en.srt`, or in a `Subs` folder) load by themselves; others load from the CC menu or by dropping them on the player. Old files in other encodings (Cyrillic, Arabic, Greek…) can be switched to the right one when the text looks wrong.
+  * **Online search** with OpenSubtitles.org's own search: no account and no API key. If that site can't be reached, Stremio's OpenSubtitles addon stands in. It searches by the file's hash (*exact match* for that very file) and by the title, year, season and episode from the file name; other titles with the same name are a pick away. The best are listed first:
+    * the exact match, then the *same release*, then the closest name, the most downloads and trusted uploaders;
+    * cinema recordings and machine translations go last;
+    * multi-CD sets and picture formats are left out.
+
+    One click downloads the subtitles and turns them on, in the right encoding. The ad lines OpenSubtitles puts in its files are removed. Only the title, and the file's hash and size, are sent.
+  * **Timing**: <kbd>G</kbd> / <kbd>H</kbd> show them 0.1 s earlier / later. Or **sync by line**: a list of every line with its time, like song lyrics, following the video. Click the line you hear being said and all of them move to match; type a few words to find a line, ▶ jumps to it.
+  * Size S–XL, outline or dark box. Each movie remembers its subtitles (downloads too) and each subtitle file its timing. <kbd>V</kbd> cycles the loaded tracks.
+* **Resumes** each movie where you left it, with *Start over*. Warns when a movie plays without sound because its audio can't be decoded (DTS, or AC-3 in a file that isn't MKV).
+* Keys: <kbd>Space</kbd>/<kbd>K</kbd> play, <kbd>←</kbd><kbd>→</kbd> (<kbd>J</kbd>/<kbd>L</kbd>) seek, <kbd>↑</kbd><kbd>↓</kbd> volume, <kbd>M</kbd> mute, <kbd>F</kbd> fullscreen, <kbd>N</kbd>/<kbd>P</kbd> next / previous, <kbd>C</kbd> subtitles, <kbd>A</kbd> audio track, <kbd>G</kbd>/<kbd>H</kbd> subtitle timing, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> speed, <kbd>0</kbd>–<kbd>9</kbd> jump, <kbd>O</kbd> open. Media keys and all the extension shortcuts work too.
 
 ### 🔒 Quality lock (the original feature)
 
@@ -97,6 +110,7 @@ Live throughput, data used (and per hour), FPS and dropped frames, buffer ahead,
 * When a site's own button puts the **bare `<video>`** in fullscreen, nothing can sit over it: the backdrop is hidden and the toolbar can't be clicked. Use the toolbar's fullscreen button instead.
 * The quality lock only works within what the service already sends. It never adds a rendition and doesn't touch DRM. If a site's own quality setting is low (Prime's Good/Better/Best, Hotstar Data Saver, Netflix playback settings), the higher renditions are never sent.
 * Some mouse software (Logitech Options, etc.) sends side buttons as keystrokes. Then the browser handles them before the page sees them.
+* In the QualityLock player, **DTS and TrueHD audio** can't be played, and neither can **Dolby Digital in an MP4**: the player decodes Dolby audio only in MKV files. Decoded Dolby audio changes pitch at speeds other than 1× (Chrome keeps the pitch for audio it plays itself). Audio and subtitle tracks are read from **MKV** files only, not from MP4. DVD picture subtitles (VobSub) aren't shown.
 
 ---
 
@@ -187,6 +201,11 @@ extension/
 ├── local.html/css/js  QualityLock player for files from your computer: its own controls, playlists from
 │                      files / folders, volume boost, resume; files play from blob: URLs. Loads defaults,
 │                      bridge, inject and player.js like a site gets them (player.js keeps its toolbar out of the way there)
+├── local-mkv.js       The player's MKV reader: track list, audio track switching, subtitle blocks and audio frames from inside the file
+├── local-subs.js      The player's subtitles: SRT / VTT / ASS parsing and drawing, delay, sync list, online search
+├── local-pgs.js       Blu-ray picture subtitles (PGS): display sets to timed screens, run-length pictures to canvases
+├── local-decode.js    Dolby audio the player decodes itself: reads ahead, decodes in a worker, plays in step with the video
+├── local-ac3-worker.js  The worker: FFmpeg's AC-3 / E-AC-3 decoder (vendor/ac3, WebAssembly; MPL-2.0 and LGPL-2.1, licences there)
 ├── icons/
 ├── scripts/package.py  Builds the store zip (not shipped)
 ├── store/LISTING.md    Store dashboard copy (not shipped)

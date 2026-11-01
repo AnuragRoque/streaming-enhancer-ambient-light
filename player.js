@@ -148,6 +148,14 @@
     if (hsl[1] < 0.2 || hsl[2] < 0.08 || hsl[2] > 0.95) return null;
     return [hslHex(hsl[0], clamp(hsl[1], 0.45, 0.72), 0.72), hslHex((hsl[0] + 36) % 360, clamp(hsl[1], 0.4, 0.62), 0.75)];
   }
+  // A small GPU canvas to scale a video frame down into and read back. A new one
+  // each time: Chrome moves a canvas that is read back again and again to the
+  // CPU (with a console warning), and then the whole frame would be read back.
+  function freshCanvas(w, h) {
+    var c = doc.createElement('canvas');
+    c.width = w; c.height = h;
+    return c.getContext('2d');
+  }
   var colorCtx = null;
   function parseColor(str) {
     if (!colorCtx) { var c = doc.createElement('canvas'); c.width = c.height = 1; colorCtx = c.getContext('2d', { willReadFrequently: true }); }
@@ -160,7 +168,6 @@
   }
   // 'From site': the site's own brand colour (theme-color); if it has none or it's
   // grey, the most colourful part of the picture, so it follows the scene.
-  var dynCv = null;
   function refreshDynamic() {
     if (cfg.toolbar.accent !== 'dynamic') return;
     var found = null;
@@ -170,8 +177,7 @@
       var v = targetVideo();
       if (v && !isDrm(v) && v.readyState >= 2 && v.videoWidth) {
         try {
-          if (!dynCv) { dynCv = doc.createElement('canvas'); dynCv.width = 32; dynCv.height = 18; }
-          var x = dynCv.getContext('2d');
+          var x = freshCanvas(32, 18);
           x.drawImage(v, 0, 0, 32, 18);
           var d = x.getImageData(0, 0, 32, 18).data, R = 0, Gg = 0, B = 0, W = 0;
           for (var i = 0; i < d.length; i += 4) {
@@ -669,7 +675,7 @@
   // --- black bars inside the picture (Fill mode) -----------------------
   // Samples a small copy of the frame and looks for near-black rows/columns at
   // the edges. Needs readable pixels: not DRM, not a cross-origin file.
-  var crop = { v: null, blocked: false, cv: null, ctx: null, cand: null, hits: 0, cur: null, nextAt: 0, lastT: -1 };
+  var crop = { v: null, blocked: false, cand: null, hits: 0, cur: null, nextAt: 0, lastT: -1 };
   function cropSample(v) {
     if (!v || (disp.mode !== 'fill' && disp.mode !== 'stretch' && backdrop().mode === 'off') || disp.inner !== 0 || !cfg.display.smartCrop || disp.rot % 180) return;
     if (crop.v !== v) { crop.v = v; crop.blocked = false; crop.cur = null; crop.cand = null; crop.hits = 0; crop.nextAt = 0; }
@@ -682,17 +688,11 @@
     crop.nextAt = now() + (crop.hits >= 3 ? 15000 : 1000);
     var W = 96;
     var H = clamp(Math.round(W * v.videoHeight / v.videoWidth), 24, 160);
-    if (!crop.cv) {
-      crop.cv = doc.createElement('canvas');
-      // GPU canvas: the video frame is scaled down on the GPU and only this
-      // small image is read back, not the full frame.
-      crop.ctx = crop.cv.getContext('2d');
-    }
-    crop.cv.width = W; crop.cv.height = H;
     var data;
     try {
-      crop.ctx.drawImage(v, 0, 0, W, H);
-      data = crop.ctx.getImageData(0, 0, W, H).data;
+      var cx = freshCanvas(W, H);
+      cx.drawImage(v, 0, 0, W, H);
+      data = cx.getImageData(0, 0, W, H).data;
     } catch (e) { crop.blocked = true; return; }
     function lum(i) { return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]; }
     function rowDark(y) {

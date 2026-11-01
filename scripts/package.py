@@ -19,6 +19,10 @@ DIST = os.path.join(ROOT, 'dist')
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)  # same bytes for the same sources
 # Pages the extension opens itself (chrome.runtime.getURL), which the manifest doesn't name.
 EXTRA_PAGES = ['local.html']
+# Loaded by scripts rather than pages: the player's Dolby decoder worker, what it
+# imports, and that code's licences (FFmpeg's LGPL wants them shipped with it).
+EXTRA_FILES = ['local-ac3-worker.js', 'vendor/ac3/ac3.js', 'vendor/ac3/README.md', 'vendor/ac3/LICENSE',
+               'vendor/ac3/ffmpeg/LICENSE.md', 'vendor/ac3/ffmpeg/COPYING.LGPLv2.1']
 
 
 def fail(msg):
@@ -76,6 +80,7 @@ def main():
             refs.feed(f.read())
         base = os.path.dirname(page)
         files.update(os.path.normpath(os.path.join(base, r)).replace(os.sep, '/') for r in refs.files)
+    files.update(EXTRA_FILES)
     for war in m.get('web_accessible_resources', []):
         files.update(war.get('resources', []))
     locales = os.path.join(ROOT, '_locales')

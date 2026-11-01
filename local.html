@@ -16,6 +16,8 @@
   <div class="stage paused" id="stage">
     <!-- local.js puts the <video> here, first, once a file is chosen. -->
     <div class="surface" id="surface"></div>
+    <div class="subs outline" id="subs"></div>
+    <canvas class="subpic" id="subpic"></canvas>
     <div class="spinner" id="spinner" hidden></div>
     <div class="flash" id="flash" aria-live="polite"></div>
 
@@ -85,6 +87,9 @@
             <span class="time"><span id="cur">0:00</span><span class="sl">/</span><span id="dur">0:00</span></span>
           </div>
           <div class="right">
+            <button type="button" class="b cc" id="ccBtn" data-tip="Subtitles (C)" aria-label="Subtitles" aria-haspopup="menu">
+              <svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.6"/><path d="M10.6 10.3a2.3 2.3 0 1 0 0 3.4M16.6 10.3a2.3 2.3 0 1 0 0 3.4"/></svg>
+            </button>
             <button type="button" class="b txt" id="speedBtn" data-tip="Speed" aria-label="Speed" aria-haspopup="menu">1×</button>
             <button type="button" class="b" id="listBtn" data-tip="Playlist" aria-label="Playlist" aria-haspopup="menu">
               <svg viewBox="0 0 24 24"><path d="M4 6.5h12M4 11.5h12M4 16.5h7"/><path class="f" d="M15 13.6v6l5-3z"/></svg>
@@ -106,6 +111,9 @@
       <div class="menu" id="menu" role="menu" hidden></div>
     </div>
 
+    <!-- Sync list and online subtitle search (local-subs.js). -->
+    <aside class="side" id="side" hidden></aside>
+
     <div class="toast" id="toast" hidden></div>
   </div>
 
@@ -113,21 +121,26 @@
     <div class="card">
       <img src="icons/icon48.png" alt="" width="40" height="40">
       <h1>QualityLock player</h1>
-      <p id="lead">Drop videos or a whole folder here. A folder becomes a playlist with next and previous.</p>
+      <p id="lead">Drop videos or a whole folder here. A folder becomes a playlist with next and previous, and subtitle files next to the videos load by themselves.</p>
       <div class="actions">
         <button type="button" class="btn primary" id="pickFiles">Choose videos</button>
         <button type="button" class="btn" id="pickFolder">Open a folder</button>
       </div>
       <p class="note" id="note" role="status"></p>
       <p class="note">Plays straight from your disk. Nothing is uploaded.</p>
-      <p class="keys"><kbd>Space</kbd> play <kbd>←</kbd><kbd>→</kbd> seek <kbd>↑</kbd><kbd>↓</kbd> volume <kbd>F</kbd> fullscreen <kbd>M</kbd> mute <kbd>N</kbd><kbd>P</kbd> next / previous <kbd>O</kbd> open</p>
+      <p class="keys"><kbd>Space</kbd> play <kbd>←</kbd><kbd>→</kbd> seek <kbd>↑</kbd><kbd>↓</kbd> volume <kbd>F</kbd> fullscreen <kbd>M</kbd> mute <kbd>N</kbd><kbd>P</kbd> next / previous <kbd>C</kbd> subtitles <kbd>A</kbd> audio track <kbd>G</kbd><kbd>H</kbd> subtitle timing <kbd>O</kbd> open</p>
     </div>
   </section>
 
-  <input type="file" id="fileInput" multiple accept="video/*,audio/*,.mkv,.mov,.m4v,.avi,.ts,.m2ts" hidden>
+  <input type="file" id="fileInput" multiple accept="video/*,audio/*,.mkv,.mov,.m4v,.avi,.ts,.m2ts,.srt,.vtt,.ass,.ssa" hidden>
+  <input type="file" id="subInput" multiple accept=".srt,.vtt,.ass,.ssa" hidden>
   <input type="file" id="dirInput" webkitdirectory multiple hidden>
   <div class="drop" id="drop" hidden>Drop to play</div>
 
+  <script src="local-mkv.js"></script>
+  <script src="local-pgs.js"></script>
+  <script src="local-decode.js"></script>
+  <script src="local-subs.js"></script>
   <script src="local.js"></script>
 </body>
 </html>

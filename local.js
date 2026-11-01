@@ -79,11 +79,14 @@
   // Playlist
   // ==================================================================
   var MEDIA_EXT = /\.(mp4|m4v|mkv|webm|mov|ogv|ogg|avi|ts|m2ts|mp3|m4a|aac|flac|wav|opus)$/i;
+  var SUB_EXT = /\.(srt|vtt|ass|ssa)$/i;
   function isMedia(f) { return !!f && (/^(video|audio)\//.test(f.type) || MEDIA_EXT.test(f.name)); }
+  function wantedFile(name) { return MEDIA_EXT.test(name) || SUB_EXT.test(name); }
   function natural(a, b) { return a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }); }
   function bareName(name) { return name.replace(/\.[^.]+$/, ''); }
 
   var list = [];   // [{ file, path }], path relative to the folder picked
+  var subFiles = []; // subtitle files that came with them
   var idx = -1;
   var folder = '';
   var url = '';
@@ -97,18 +100,34 @@
 
   function openList(entries, dirName) {
     var media = entries.filter(function (e) { return isMedia(e.file); }).sort(natural);
+    var subsIn = entries.filter(function (e) { return SUB_EXT.test(e.file.name); });
     if (!media.length) {
+      // Subtitles alone, while something plays: for that video.
+      if (subsIn.length && url) { subs.addFiles(subsIn.map(function (e) { return e.file; }), true); return; }
       if (url) toast('No video files there.');
       else showPicker(entries.length ? 'No video files there.' : '');
       return;
     }
     list = media;
+    subFiles = subsIn;
     folder = dirName || '';
     var start = 0;
     if (wanted) for (var i = 0; i < list.length; i++) if (list[i].file.name === wanted) { start = i; break; }
     wanted = '';
     stage.classList.toggle('single', list.length < 2);
     playAt(start);
+  }
+  // Subtitle files for list[i]: the same name ("Movie.srt", "Movie.en.srt") in
+  // its folder or a Subs folder next to it; any, when there's just one video.
+  function dirOf(path) { return path.indexOf('/') !== -1 ? path.replace(/\/[^/]*$/, '') : ''; }
+  function sidecarsFor(i) {
+    var e = list[i], base = bareName(e.file.name).toLowerCase(), dir = dirOf(e.path);
+    return subFiles.filter(function (sf) {
+      if (list.length === 1) return true;
+      if (sf.file.name.toLowerCase().indexOf(base) !== 0) return false;
+      var sd = dirOf(sf.path);
+      return sd === dir || sd.replace(/\/?(subs?|subtitles?)$/i, '') === dir;
+    }).map(function (sf) { return sf.file; });
   }
   function fromFiles(files) {
     var out = [];
@@ -125,9 +144,18 @@
     var old = url;
     thumbsReset();
     url = URL.createObjectURL(f);
+    swap = null;
+    v.autoplay = true;
     v.src = url;
     if (old) URL.revokeObjectURL(old);
     audioChecked = false;
+    // MKV: the audio and subtitle tracks inside it, which Chrome doesn't offer.
+    mkv = null;
+    audioNum = 0;
+    decoder.stop();
+    var own = window.qlockMkv ? window.qlockMkv.read(f).catch(function () { return null; }) : Promise.resolve(null);
+    own.then(function (info) { if (list[idx] && list[idx].file === f) setupAudio(f, info); });
+    subs.attach(sidecarsFor(i), own.then(function (info) { return info ? { file: f, info: info } : null; }));
     pick.hidden = true;
     note.textContent = '';
     stage.classList.add('has-video');
@@ -161,6 +189,104 @@
     else save(k, Math.floor(t));
   }
 
+  // ==================================================================
+  // Audio tracks (MKV)
+  // ==================================================================
+  // Chrome plays an MKV's first audio track it can decode. The others are in
+  // the CC menu: picking one reloads the file with the rest hidden from Chrome
+  // (qlockMkv.withAudio) and carries on from the same moment. Dolby tracks,
+  // which Chrome can't decode, are decoded by local-decode.js while the video
+  // plays with all its audio hidden from Chrome.
+  var mkv = null, audioNum = 0, swap = null;
+  // Until the video exists (and without local-decode.js): nothing decoded here.
+  var decoder = { start: noop, stop: noop, active: function () { return false; }, volume: noop };
+  var langNames = null;
+  try { langNames = new Intl.DisplayNames(['en'], { type: 'language' }); } catch (e) { langNames = null; }
+  function audioKey(f) { return 'qlp:audio:' + f.name + ':' + f.size; }
+  function audioTracks() { return mkv ? mkv.tracks.filter(function (t) { return t.type === window.qlockMkv.AUDIO; }) : []; }
+  function audioLabel(t) {
+    var code = window.qlockMkv.langCode(t), lang = code;
+    try { if (code && langNames) lang = langNames.of(code); } catch (e) { lang = code; }
+    if (t.name && lang && t.name.toLowerCase().indexOf(lang.toLowerCase()) === -1) return lang + ' · ' + t.name;
+    return t.name || lang || 'Track ' + (audioTracks().indexOf(t) + 1);
+  }
+  function audioDetail(t) { return [window.qlockMkv.codecName(t), window.qlockMkv.channelsName(t.channels)].filter(Boolean).join(' '); }
+  function decodedHere(t) { return !window.qlockMkv.canPlay(t) && !!window.qlockDecode && window.qlockDecode.can(t); }
+  function playable(t) { return window.qlockMkv.canPlay(t) || decodedHere(t); }
+  // The file's default track (its flag, else the first), if it can be played.
+  function defaultAudio() {
+    var ok = audioTracks().filter(playable), d = ok.filter(function (t) { return t.def; })[0] || ok[0];
+    return d ? d.num : 0;
+  }
+  function setupAudio(f, info) {
+    mkv = info;
+    if (!info) return;
+    audioNum = window.qlockMkv.current(info);
+    // The track picked for this movie last time, else the file's default.
+    var want = +load(audioKey(f)) || defaultAudio();
+    if (want && want !== audioNum && audioTracks().some(function (t) { return t.num === want && playable(t); })) setAudio(want, true);
+  }
+  function setAudio(num, quiet) {
+    var M = window.qlockMkv, f = list[idx] && list[idx].file;
+    var t = audioTracks().filter(function (x) { return x.num === num; })[0];
+    if (!video || !f || !t || num === audioNum || !playable(t)) return;
+    var wasDecoded = decoder.active();
+    audioNum = num;
+    save(audioKey(f), num === defaultAudio() ? null : num);
+    if (M.canPlay(t)) {
+      decoder.stop();
+      swapSource(M.withAudio(f, mkv, num));
+    } else {
+      // Every track Chrome could play hidden from it (when there's one), this one decoded here.
+      if (!wasDecoded && M.current(mkv)) swapSource(M.withAudio(f, mkv, num));
+      decoder.start(f, mkv, t);
+    }
+    if (!quiet) flash(null, 'Audio: ' + audioLabel(t));
+  }
+  // The decoder failed (it couldn't load, or the track is damaged): back to Chrome's own track.
+  function decodeFailed(e) {
+    var M = window.qlockMkv, f = list[idx] && list[idx].file, t = audioTracks().filter(function (x) { return x.num === audioNum; })[0];
+    toast('Couldn’t play the ' + (t ? M.codecName(t) + ' ' : '') + 'audio: ' + (e && e.message || 'the decoder stopped'), null, null, 8000);
+    var c = mkv ? M.current(mkv) : 0;
+    audioNum = c;
+    if (c && f) swapSource(M.withAudio(f, mkv, c));
+  }
+  function cycleAudio() {
+    var ok = audioTracks().filter(playable);
+    if (ok.length < 2) { flash(null, ok.length ? 'This video has one audio track' : 'No audio track this player can play'); return; }
+    var i = ok.map(function (t) { return t.num; }).indexOf(audioNum);
+    setAudio(ok[(i + 1) % ok.length].num);
+  }
+  // The same video from another source: it picks up at the same moment, playing or paused.
+  function swapSource(blob) {
+    var old = url;
+    thumbsReset();
+    url = URL.createObjectURL(blob);
+    if (video.readyState >= 1) {
+      swap = { t: video.currentTime, playing: !video.paused, rate: video.playbackRate };
+      video.autoplay = swap.playing;
+    }
+    video.src = url;
+    if (old) URL.revokeObjectURL(old);
+  }
+  function audioMenu(m) {
+    var all = audioTracks(), M = window.qlockMkv;
+    if (all.length < 2) return;
+    m.appendChild(el('h3', '', 'Audio'));
+    var cant = [];
+    all.forEach(function (t) {
+      var b = item(audioLabel(t), t.num === audioNum, function () { closeMenu(); setAudio(t.num); }, el('span', 'd', audioDetail(t)));
+      if (!playable(t)) {
+        b.disabled = true;
+        b.title = 'This player can’t play ' + M.codecName(t) + ' audio';
+        if (cant.indexOf(M.codecName(t)) === -1) cant.push(M.codecName(t));
+      }
+      m.appendChild(b);
+    });
+    if (cant.length) m.appendChild(el('p', 'mhint', 'Dimmed: this player can’t play ' + cant.join(' or ') + ' audio.'));
+    m.appendChild(el('hr'));
+  }
+
   function showPicker(msg) {
     note.textContent = msg || '';
     note.classList.toggle('warn', !!msg);
@@ -182,6 +308,7 @@
     // A file's blob: URL can be opened twice, so player.js's timeline previews can use it too.
     video.setAttribute('data-qlock-file', '');
     stage.insertBefore(video, stage.firstChild);
+    if (window.qlockDecode) { decoder = window.qlockDecode(video, decodeFailed); decoder.volume(level); }
 
     video.addEventListener('play', syncPlay);
     video.addEventListener('pause', function () { syncPlay(); savePos(); });
@@ -191,6 +318,16 @@
       var h = video.videoWidth && video.videoHeight ? Math.round(192 * video.videoHeight / video.videoWidth) : 108;
       thumb.height = clamp(h, 60, 192);
       thumb.style.height = thumb.height + 'px';
+      if (swap) {
+        // Another audio track: back to where it was.
+        // (Autoplay stays as swapSource set it: Chrome looks at it again once enough has loaded.)
+        video.currentTime = swap.t;
+        video.playbackRate = swap.rate;
+        if (swap.playing) video.play().catch(noop);
+        swap = null;
+        render();
+        return;
+      }
       var saved = +load(posKey(list[idx].file));
       if (saved >= 30 && saved < video.duration - 60) {
         video.currentTime = saved;
@@ -222,7 +359,13 @@
       // then plays in silence with no error at all. Looks the same as a clip with
       // no sound, so only for movie-length files.
       setTimeout(function () {
-        if (video && !video.paused && !video.muted && video.duration >= 600 && video.webkitAudioDecodedByteCount === 0) {
+        var all = audioTracks();
+        if (all.length && !all.some(playable)) {
+          var names = all.map(window.qlockMkv.codecName).filter(function (n, i, a) { return a.indexOf(n) === i; });
+          toast('No sound: this video’s audio is ' + names.join(' and ') + ', which this player can’t play. Converting the audio to AAC fixes it.', null, null, 10000);
+          return;
+        }
+        if (video && !video.paused && !video.muted && video.duration >= 600 && video.webkitAudioDecodedByteCount === 0 && !decoder.active()) {
           toast('No sound? Chrome can’t play this file’s audio format (AC-3, E-AC-3 and DTS are common in movies). Converting the audio to AAC fixes it.', null, null, 10000);
         }
       }, 4000);
@@ -287,7 +430,7 @@
     lastX = e.clientX; lastY = e.clientY;
     // The bars and menus hold the controls up; the centre buttons don't, since a
     // mouse often rests mid-screen while watching.
-    overControls = !!(uiShown && e.target.closest && e.target.closest('.top, .bottom, .menu'));
+    overControls = !!(uiShown && e.target.closest && e.target.closest('.top, .bottom, .menu, .side'));
     showUi();
   }, { passive: true });
   stage.addEventListener('pointerleave', function () {
@@ -300,7 +443,7 @@
   var swallowClick = false;
   stage.addEventListener('pointerdown', function (e) {
     showUi();
-    if (!menuOpen || menu.contains(e.target) || (e.target.closest && e.target.closest('#speedBtn, #listBtn, #setBtn'))) return;
+    if (!menuOpen || menu.contains(e.target) || (e.target.closest && e.target.closest('#speedBtn, #listBtn, #setBtn, #ccBtn'))) return;
     closeMenu();
     if (e.target === surface) swallowClick = true;
   }, true);
@@ -475,6 +618,7 @@
     stage.classList.toggle('muted', muted);
     stage.classList.toggle('vol-low', !muted && level < 0.5);
     stage.classList.toggle('boost', !muted && level > 1);
+    decoder.volume(eff);
     volFill.style.transform = 'scaleX(' + eff / 2 + ')';
     volKnob.style.left = (eff / 2 * 100) + '%';
     volVal.textContent = muted ? 'Muted' : Math.round(level * 100) + '%';
@@ -686,6 +830,7 @@
   $('pipBtn').addEventListener('click', togglePip);
   $('qlBtn').addEventListener('click', function () { closeMenu(); act('toggleToolbar'); });
   speedBtn.addEventListener('click', function () { openMenu('speed', speedMenu); });
+  $('ccBtn').addEventListener('click', function () { openMenu('subs', function (m) { audioMenu(m); subs.menu(m); }); });
   $('listBtn').addEventListener('click', function () { openMenu('list', listMenu); });
   $('setBtn').addEventListener('click', function () {
     if (menuFor === 'settings') { closeMenu(); return; }
@@ -716,6 +861,7 @@
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     var k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === 'Escape' && menuOpen) { closeMenu(); e.preventDefault(); return; }
+    if (k === 'Escape' && subs.sideOpen()) { subs.closeSide(); e.preventDefault(); return; }
     if ((k === ' ' || k === 'Enter') && t && t.tagName === 'BUTTON') return;
     if (k === 'o') { e.preventDefault(); fileInput.click(); return; }
     if (!video || !url) return;
@@ -727,6 +873,11 @@
     else if (k === 'ArrowDown') setLevel((video.muted ? 0 : level) - 0.05, true);
     else if (k === 'm') toggleMute();
     else if (k === 'f') toggleFs();
+    else if (k === 'c') subs.toggle();
+    else if (k === 'a') cycleAudio();
+    else if (k === 'v') subs.cycle();
+    else if (k === 'g') subs.nudge(-0.1);
+    else if (k === 'h') subs.nudge(0.1);
     else if (k === 'n') next();
     else if (k === 'p') prev();
     else if (k === '>') act('speedUp');
@@ -775,7 +926,7 @@
         if (r.done || out.length >= 2000) return out;
         var h = r.value;
         var p = h.kind === 'file'
-          ? (MEDIA_EXT.test(h.name) ? h.getFile().then(function (f) { out.push({ file: f, path: prefix + f.name }); }) : Promise.resolve())
+          ? (wantedFile(h.name) ? h.getFile().then(function (f) { out.push({ file: f, path: prefix + f.name }); }) : Promise.resolve())
           : depth < 3 ? collect(h, prefix + h.name + '/', depth + 1, out) : Promise.resolve();
         return p.then(step);
       });
@@ -820,7 +971,7 @@
     function done() { if (--pending === 0) cb(out, dirName); }
     function walk(entry, path, depth) {
       if (entry.isFile) {
-        if (!MEDIA_EXT.test(entry.name)) return;
+        if (!wantedFile(entry.name)) return;
         pending++;
         entry.file(function (f) { out.push({ file: f, path: path + f.name }); done(); }, done);
         return;
@@ -840,6 +991,12 @@
     entries.forEach(function (en) { walk(en, '', 0); });
     if (pending === 0) cb(out, dirName);
   }
+
+  var subs = window.qlockSubs({
+    video: function () { return video; },
+    videoFile: function () { return list[idx] ? list[idx].file : null; },
+    toast: toast, flash: flash, el: el, item: item, chips: chips, closeMenu: closeMenu, showUi: showUi
+  });
 
   window.addEventListener('pagehide', savePos);
   renderVol();

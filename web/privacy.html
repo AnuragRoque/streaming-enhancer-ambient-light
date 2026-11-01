@@ -27,13 +27,13 @@
   <main id="main" class="doc">
     <div class="wrap">
       <h1>Privacy Policy</h1>
-      <p class="meta">QualityLock browser extension · Effective 26 October 2026</p>
+      <p class="meta">QualityLock browser extension · Effective 1 November 2026</p>
 
       <div class="summary">
         <p><strong>In short: QualityLock collects nothing.</strong></p>
         <ul>
           <li>No accounts, analytics, tracking, ads or crash reporting.</li>
-          <li>The extension never sends data to us or to anyone else. We don’t run any servers for it.</li>
+          <li>The extension never sends data to us. We don’t run any servers for it. It contacts another service only when you search for subtitles online in the QualityLock player (see below).</li>
           <li>Everything it stores stays in your browser. The only exception is your settings, which your browser can sync through your own Google account.</li>
         </ul>
       </div>
@@ -47,6 +47,11 @@
         <li><strong>Timeline previews.</strong> For plain video files, the timeline’s hover previews may load the same video a second time, from the same website, to draw small frames. Nothing is sent anywhere else.</li>
       </ul>
 
+      <h2>The QualityLock player and online subtitles</h2>
+      <p>The QualityLock player plays videos from your computer. The files stay on your device and are never uploaded.</p>
+      <p>Only when you open <em>Search OpenSubtitles</em> in its subtitles menu, it sends OpenSubtitles.org (<code>rest.opensubtitles.org</code>) the title in the search box (taken from the file’s name), the language you picked, and the video’s size and hash. The hash is a 16-character fingerprint calculated from the file’s first and last 64 KB; it doesn’t contain the video. The subtitle file you click is then downloaded from OpenSubtitles.org.</p>
+      <p>If OpenSubtitles.org can’t be reached, the same search goes to Stremio instead. The title goes to Stremio’s catalogue (<code>v3-cinemeta.strem.io</code>), and the size and hash go to its OpenSubtitles addon (<code>opensubtitles-v3.strem.io</code>). Like any website, these services see your IP address. They are run by <a href="https://www.opensubtitles.org/">OpenSubtitles</a> and <a href="https://www.stremio.com/privacy">Stremio</a> under their own privacy policies, not by QualityLock.</p>
+
       <h2>What is stored, and where</h2>
       <table class="tbl">
         <thead><tr><th>What</th><th>Where</th><th>Why</th></tr></thead>
@@ -57,6 +62,7 @@
           <tr><td>Toolbar position, display</td><td>The website’s local storage</td><td>Where you dragged the toolbar on that site. If you turn on “Remember per site”, also that site’s zoom, ratio and rotation.</td></tr>
           <tr><td>Fallback level</td><td>The website’s session storage</td><td>If a strict quality lock stops a title from playing, how far it was loosened. Cleared when you close the tab.</td></tr>
           <tr><td>Which frame plays video</td><td>Extension memory (<code>storage.session</code>)</td><td>So shortcuts reach the right player in pages with embedded videos. Cleared when the browser closes.</td></tr>
+          <tr><td>QualityLock player</td><td>The extension’s own storage on this device</td><td>Where each video was left, the volume, and subtitle choices: size, style, language, timing, and the text of the subtitles picked for each of the last 40 videos.</td></tr>
           <tr><td>Last popup tab</td><td>The extension’s own local storage</td><td>So the popup reopens on the tab you last used.</td></tr>
         </tbody>
       </table>
