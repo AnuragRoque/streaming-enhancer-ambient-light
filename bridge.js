@@ -8,10 +8,24 @@
   // postMessage can't target by name; '*' is fine for posting to our own window.
   var ORIGIN = location.origin && location.origin !== 'null' && location.protocol !== 'file:' ? location.origin : '*';
 
+  // The site in the tab, also from inside an embedded player's frame: "turn off
+  // on this site" follows it.
+  var TOP_HOST = '';
+  try {
+    var anc = location.ancestorOrigins;
+    TOP_HOST = new URL(anc && anc.length ? anc[anc.length - 1] : location.href).hostname;
+  } catch (e) { /* opaque origin */ }
+
   function push(settings) {
-    // Cache in the site's localStorage so the page script has settings
-    // synchronously at document_start on the next load.
-    try { localStorage.setItem(LS_KEY, JSON.stringify(settings)); } catch (e) { /* storage blocked */ }
+    var off = qlockSiteOff(settings.disabledSites, TOP_HOST);
+    delete settings.disabledSites;
+    if (off) settings.enabled = false;
+    // The page script needs a few values synchronously at document_start, before
+    // chrome.storage answers: whether to hook the network at all, and how to
+    // lock. Only those are cached in the site's localStorage, which the site
+    // can read; the rest arrives by message.
+    var cache = JSON.stringify(off ? { siteOff: true } : { enabled: settings.enabled, deepMode: settings.deepMode, sites: settings.sites });
+    try { if (localStorage.getItem(LS_KEY) !== cache) localStorage.setItem(LS_KEY, cache); } catch (e) { /* storage blocked */ }
     window.postMessage({ __qlock: 'settings', settings: settings }, ORIGIN);
   }
 

@@ -93,8 +93,25 @@ var QLOCK_DEFAULTS = {
     prime:   { enabled: true, mode: 'best', floor: 720 },
     hotstar: { enabled: true, mode: 'best', floor: 720 },
     other:   { enabled: true, mode: 'best', floor: 1080 }
-  }
+  },
+  // Sites ("example.com", which covers its subdomains) where the extension stays
+  // completely off, set from the popup. Never sent to pages: it would tell every
+  // site which others you use.
+  disabledSites: []
 };
+var QLOCK_MAX_DISABLED = 150; // the whole settings object must fit storage.sync's 8 kB per item
+
+// The host as stored in disabledSites: lower case, without "www.".
+function qlockHost(host) { return String(host || '').toLowerCase().replace(/^www\./, ''); }
+
+// Is the extension turned off for this host (the site in the tab)?
+function qlockSiteOff(list, host) {
+  host = qlockHost(host);
+  if (!host || !Array.isArray(list)) return false;
+  return list.some(function (d) {
+    return typeof d === 'string' && d !== '' && (host === d || host.slice(-d.length - 1) === '.' + d);
+  });
+}
 
 // Puts every known button in exactly once, keeping the stored order and switches.
 function qlockButtons(list) {

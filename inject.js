@@ -23,7 +23,7 @@
   function QL(G, BOOT) {
     'use strict';
 
-    var VERSION = '1.0.0';
+    var VERSION = '1.2.1';
     var TAG = '[QualityLock]';
     var IS_WORKER = typeof G.document === 'undefined';
     var J = G.JSON || JSON;
@@ -765,6 +765,9 @@
 
     if (!SITE) return api;
     if (BOOT && BOOT.noHooks) return api;
+    // Turned off on this site from the popup: install nothing at all, so a
+    // site we break can always be rescued.
+    if (!BOOT && settings && settings.siteOff) return api;
 
     hookFetch();
     hookXhr();

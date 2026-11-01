@@ -73,6 +73,7 @@
   var frameId = 0;  // frame holding the tab's main video (see background.js)
   var keys = {};
   var currentSite = null;
+  var tabHost = '';  // the tab's site, for "on this site" (http(s) pages only)
   var player = null; // latest player snapshot from the page
   var $ = function (id) { return document.getElementById(id); };
 
@@ -206,8 +207,29 @@
   function fmtRate(r) { return (Math.round(r * 100) / 100) + '×'; }
 
   // ---------------------------------------------------------------- render settings
+  function renderSite() {
+    $('siteCard').hidden = !tabHost;
+    if (!tabHost || !settings) return;
+    $('siteName').textContent = 'On ' + tabHost;
+    $('siteOn').checked = !qlockSiteOff(settings.disabledSites, tabHost);
+  }
+  // Off: nothing is installed on that site's pages (after a reload). On again:
+  // drops every entry covering it, including a parent domain's.
+  $('siteOn').addEventListener('change', function (e) {
+    var list = settings.disabledSites.filter(function (d) { return !qlockSiteOff([d], tabHost); });
+    if (!e.target.checked) {
+      list.push(tabHost);
+      if (list.length > QLOCK_MAX_DISABLED) list.splice(0, list.length - QLOCK_MAX_DISABLED);
+    }
+    settings.disabledSites = list;
+    save(); renderSettings();
+    $('siteHint').hidden = false;
+    $('reload').classList.add('primary');
+  });
+
   function renderSettings() {
     if (!settings) return;
+    renderSite();
     $('enabled').checked = !!settings.enabled;
     document.body.classList.toggle('disabled', !settings.enabled);
     document.body.classList.toggle('vc-off', !settings.videoController.enabled);
@@ -1014,6 +1036,9 @@
     renderSettings();
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       tabId = tabs && tabs[0] ? tabs[0].id : null;
+      var url = tabs && tabs[0] && tabs[0].url;
+      try { tabHost = url && /^https?:/i.test(url) ? qlockHost(new URL(url).hostname) : ''; } catch (e) { tabHost = ''; }
+      renderSite();
       poll();
       try { loadShortcuts(); } catch (e) { /* shortcut list is optional */ }
       setInterval(poll, 1000);

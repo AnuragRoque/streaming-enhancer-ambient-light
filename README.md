@@ -117,7 +117,7 @@ Six tabs, so nothing is buried:
 
 | Tab                | What's there                                                                                                                                                                   |
 | :----------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**      | What's playing (resolution, throughput, buffer, FPS, what the lock kept) and quick actions: toolbar, hide bars, backdrop, PiP, window, fullscreen, lights off, snapshot, stats |
+| **Now**      | **On this site** switch (turns QualityLock completely off for the tab's site), what's playing (resolution, throughput, buffer, FPS, what the lock kept) and quick actions: toolbar, hide bars, backdrop, PiP, window, fullscreen, lights off, snapshot, stats |
 | **Display**  | Fit/Fill/Stretch, aspect presets and custom ratio, zoom and stretch sliders, rotate and mirror, ambient/blur backdrop, baked-bar removal, remember per site                    |
 | **Picture**  | Presets, seven sliders (double-click resets one), hold to compare                                                                                                              |
 | **Playback** | Speed, remember speed, speed and seek steps, all mouse options, hide cursor                                                                                                    |
@@ -138,6 +138,23 @@ It follows the system light or dark theme.
 
 Updating: replace the files and press the reload icon on the extension's card. New shortcut suggestions apply only if those keys aren't taken.
 
+**If it breaks a site:** popup → Now → switch off **On this site**, then reload the tab. Nothing of QualityLock is installed on that site's pages after that (no network hooks, no toolbar).
+
+---
+
+## Publishing
+
+```bash
+python scripts/package.py     # -> dist/qualitylock-<version>.zip, the Chrome Web Store upload
+```
+
+The packager puts in only what `manifest.json` and `popup.html` reference (plus `_locales/` if present), so docs, tests, `web/` and tooling never ship. It refuses to build if the name, short name or description is over the store's limits, or if the `VERSION` constants in `inject.js` / `player.js` don't match the manifest. Before each release, bump all three.
+
+- `store/LISTING.md`: the store listing text, single-purpose statement, permission justifications, privacy answers and reviewer test steps, ready to paste into the dashboard.
+- `web/`: the product page and the privacy policy (static HTML, no scripts or external requests). `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to `main` that touches `web/`. One-time setup: repo **Settings → Pages → Source: GitHub Actions**.
+
+**Privacy.** Nothing is collected or sent anywhere. The page script needs a few settings before `chrome.storage` can answer, so `bridge.js` caches only those in each site's localStorage: on/off, Deep mode and the quality-lock choices, or just "off here". The full settings reach the page by message. The list of turned-off sites is never given to pages.
+
 ---
 
 ## File architecture
@@ -155,8 +172,11 @@ extension/
 ├── player.js       Page script (MAIN world): floating toolbar, display engine, backdrop, picture filters,
 │                   speed, timeline previews, A-B loop, snapshot, PiP, window fill, lights off, mouse, OSD
 ├── popup.html/css/js  Tabbed popup
-├── README.md / PLAN.md
-└── icons/
+├── icons/
+├── scripts/package.py  Builds the store zip (not shipped)
+├── store/LISTING.md    Store dashboard copy (not shipped)
+├── web/                Product page + privacy policy for GitHub Pages (not shipped)
+└── README.md / PLAN.md (not shipped)
 ```
 
 `player.js` is separate from `inject.js` on purpose. Deep mode copies `inject.js` into every web worker, and the UI code has no business there.

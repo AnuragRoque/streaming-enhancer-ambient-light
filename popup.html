@@ -32,6 +32,13 @@
   <main>
     <!-- ============================== NOW -->
     <section class="panel" data-panel="now" role="tabpanel" aria-labelledby="tab-now">
+      <div class="card" id="siteCard" hidden>
+        <label class="toggle">
+          <span><strong id="siteName">On this site</strong><small>Turn off if this site misbehaves. It stays on everywhere else.</small></span>
+          <input type="checkbox" id="siteOn"><span class="mini-switch"></span>
+        </label>
+        <p class="hint" id="siteHint" hidden>Reload the tab to apply this fully.</p>
+      </div>
       <div class="card now" id="now" aria-live="polite">
         <div class="now-empty" id="nowEmpty">
           <i data-icon="now" class="empty-ic"></i>

@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "QualityLock",
+  "name": "QualityLock – Streaming Enhancer, Ambient & RGB Light",
+  "short_name": "QualityLock",
   "version": "1.2.1",
-  "description": "Keeps streams at top quality, plus a floating video toolbar: fill/zoom/aspect, ambient light, picture filters, speed, PiP and mouse controls.",
+  "description": "Keeps streams at top quality and upgrades any video: ambient & RGB light for black bars, zoom/fill, picture filters, speed and PiP.",
+  "homepage_url": "https://github.com/AnuragRoque/streaming-enhancer-ambient-light",
   "permissions": [
     "storage",
     "scripting"
@@ -48,7 +50,7 @@
     "seek-back": { "description": "Seek back (step set in the popup)" },
     "seek-forward": { "description": "Seek forward (step set in the popup)" },
     "toggle-fill": { "description": "Hide black bars on / off" },
-    "cycle-backdrop": { "description": "Cycle ambient light / blur fill / off" },
+    "cycle-backdrop": { "description": "Cycle the black-bar backdrop: ambient, blur, RGB light, image, off" },
     "toggle-pip": { "description": "Picture-in-Picture" },
     "toggle-fullscreen": { "description": "Fullscreen (player)" },
     "window-fullscreen": { "description": "Fill the browser window" },
