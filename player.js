@@ -200,6 +200,15 @@
     dynAccent = found;
     if (tb.w) accentVars(tb.w);
     if (osdUi) accentVars(osdUi.box);
+    pageTheme();
+  }
+  // The QualityLock player's page takes the toolbar's theme and accent: its
+  // menus and panels are drawn in them (local.css reads these).
+  function pageTheme() {
+    if (!OWN_PLAYER || !doc.documentElement) return;
+    doc.documentElement.setAttribute('data-theme', tbTheme());
+    accentVars(doc.documentElement);
+    embUpdate();
   }
 
   // Target for messages to the bridge in this same window.
@@ -1902,7 +1911,7 @@
 
   function osd(title, desc, iconName, pct) {
     if (!doc.documentElement) return;
-    if (!retired && (!cfg.videoController.showOsd || tb.panelId)) return; // an open panel already shows the value
+    if (!retired && (!cfg.videoController.showOsd || tb.panelId || emb.api)) return; // an open panel already shows the value
     if (!osdUi) {
       var host = h('div', { 'data-qlock-osd': '' });
       var root = host.attachShadow({ mode: 'open' });
@@ -2065,11 +2074,12 @@
     winfs: 'window-fullscreen', lights: 'toggle-lights', back: 'seek-back', fwd: 'seek-forward', snapshot: 'snapshot'
   };
   var PANELS = { speed: true, display: true, backdrop: true, picture: true };
+  var OWN_TB_KEY = '__qlock_owntb';
 
   var tb = {
     host: null, root: null, w: null, bar: null, row: null, tl: null, btn: {}, panel: null, panelId: '', panelApi: null,
-    tip: null, tipTimer: 0, tipFor: null, enabled: cfg.toolbar.show !== 'manual' && !OWN_PLAYER, shown: false, force: 0,
-    drag: null, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false, forPanel: false,
+    tip: null, tipTimer: 0, tipFor: null, enabled: tbDefault(), shown: false, force: 0,
+    drag: null, sig: '', seek: null, vs: null, md: null, curT: null, durT: null, remaining: false,
     pos: { fx: 0.5, fy: 0.035 }
   };
   try {
@@ -2077,9 +2087,17 @@
     if (savedPos && isFinite(savedPos.fx) && isFinite(savedPos.fy)) tb.pos = { fx: clamp(savedPos.fx, 0, 1), fy: clamp(savedPos.fy, 0, 1) };
   } catch (e) { /* storage blocked */ }
 
+  // On a site the toolbar follows the "show" setting. In the QualityLock player
+  // it's off, as the player has its own controls, unless turned on there.
+  function tbDefault() {
+    if (!OWN_PLAYER) return cfg.toolbar.show !== 'manual';
+    try { return G.localStorage.getItem(OWN_TB_KEY) === '1'; } catch (e) { return false; }
+  }
+  function tbTheme() { return ['dark', 'light', 'glass'].indexOf(cfg.toolbar.theme) !== -1 ? cfg.toolbar.theme : 'glass'; }
+  // The toolbar, or a panel shown in the player's menu.
   function inToolbar(e) {
-    if (!tb.host) return false;
-    try { return e.composedPath().indexOf(tb.host) !== -1; } catch (x) { return false; }
+    if (!tb.host && !emb.host) return false;
+    try { var path = e.composedPath(); return (!!tb.host && path.indexOf(tb.host) !== -1) || (!!emb.host && path.indexOf(emb.host) !== -1); } catch (x) { return false; }
   }
 
   function rangeFill(input) {
@@ -2099,7 +2117,7 @@
     return {
       el: el,
       set: function (v) {
-        if (G.document.activeElement === tb.host && tb.root.activeElement === input) return;
+        if (input.getRootNode().activeElement === input) return;
         if (+input.value !== v) { input.value = v; rangeFill(input); }
         out.textContent = fmtFn(v);
       }
@@ -2290,7 +2308,7 @@
         fxEls.forEach(function (x) { x.classList.toggle('on', x.__id === c.rgbEffect); });
         colorRow.style.display = c.rgbEffect === 'breathe' || c.rgbEffect === 'static' ? '' : 'none';
         spd.el.style.display = c.rgbEffect === 'static' ? 'none' : '';
-        if (hexOk(c.rgbColor) && tb.root.activeElement !== color && color.value !== c.rgbColor) color.value = c.rgbColor;
+        if (hexOk(c.rgbColor) && color.getRootNode().activeElement !== color && color.value !== c.rgbColor) color.value = c.rgbColor;
         bars.update();
         var v = targetVideo();
         var msg = c.mode === 'rgb' ? 'Lights the black bars like an LED strip behind the screen. Softness spreads the glow.'
@@ -2354,10 +2372,13 @@
     };
   }
 
+  function buildPanel(id) {
+    return id === 'speed' ? buildSpeedPanel() : id === 'display' ? buildDisplayPanel() : id === 'backdrop' ? buildBackdropPanel() : id === 'picture' ? buildPicturePanel() : null;
+  }
   function openPanel(id) {
     if (tb.panelId === id) { closePanel(); return; }
     closePanel();
-    var api = id === 'speed' ? buildSpeedPanel() : id === 'display' ? buildDisplayPanel() : id === 'backdrop' ? buildBackdropPanel() : id === 'picture' ? buildPicturePanel() : null;
+    var api = buildPanel(id);
     if (!api) return;
     tb.panelId = id;
     tb.panelApi = api;
@@ -2371,7 +2392,6 @@
     hideTip();
   }
   function closePanel() {
-    if (tb.forPanel) { tb.forPanel = false; tb.enabled = false; }
     if (tb.panel && tb.panel.parentNode) tb.panel.parentNode.removeChild(tb.panel);
     if (tb.panelId && tb.btn[tb.panelId]) tb.btn[tb.panelId].classList.remove('open');
     tb.panel = null; tb.panelId = ''; tb.panelApi = null;
@@ -2384,6 +2404,48 @@
     tb.panel.classList.toggle('down', !up);
     tb.panel.classList.toggle('right', r.left + 306 > G.innerWidth - 8);
     tb.panel.style.maxHeight = Math.max(160, (up ? r.top : G.innerHeight - r.bottom) - 18) + 'px';
+  }
+
+  // --- a panel inside the QualityLock player's own menu --------------
+  // local.html shows a panel in place in its settings menu: it puts an element
+  // with data-qlock-panel there and asks for the panel ('embedPanel'). The panel
+  // is the toolbar's, drawn in a shadow root on that element in the toolbar's
+  // theme, without a box of its own (the menu is the box). It's dropped once
+  // the element leaves the page.
+  var EMB_CSS = '.w.emb{color:var(--fg);font-size:12.5px}.emb .ph>b{display:none}.emb .ph:not(:has(.big)){display:none}';
+  var emb = { host: null, w: null, api: null };
+  function embedPanel(id) {
+    closeEmbed();
+    var host = doc.querySelector('[data-qlock-panel]');
+    var api = host && buildPanel(id);
+    if (!api) return;
+    var root = host.shadowRoot;
+    if (!root) {
+      root = host.attachShadow({ mode: 'open' });
+      adopt(root, TB_CSS + EMB_CSS);
+      // Keys stay in the panel (typing, arrows on a slider), but Escape is the menu's.
+      ['keydown', 'keyup', 'keypress'].forEach(function (t) {
+        host.addEventListener(t, function (e) { if (e.key !== 'Escape') e.stopPropagation(); });
+      });
+    }
+    emb.host = host;
+    emb.api = api;
+    emb.w = h('div', { class: 'w emb' });
+    api.el.style.cssText = 'display:flex;flex-direction:column;gap:11px';
+    emb.w.appendChild(api.el);
+    root.appendChild(emb.w);
+    embUpdate();
+  }
+  function closeEmbed() {
+    if (emb.w && emb.w.parentNode) emb.w.parentNode.removeChild(emb.w);
+    emb = { host: null, w: null, api: null };
+  }
+  function embUpdate() {
+    if (!emb.api) return;
+    if (!emb.host.isConnected) { closeEmbed(); return; }
+    emb.w.className = 'w emb t-' + tbTheme();
+    accentVars(emb.w);
+    emb.api.update();
   }
 
   // --- tooltips -----------------------------------------------------
@@ -2438,8 +2500,7 @@
     closePanel();
     while (tb.root.firstChild) tb.root.removeChild(tb.root.firstChild);
     tb.btn = {};
-    var theme = ['dark', 'light', 'glass'].indexOf(cfg.toolbar.theme) !== -1 ? cfg.toolbar.theme : 'glass';
-    tb.w = h('div', { class: 'w t-' + theme + (cfg.toolbar.layout === 'expanded' ? ' x' : '') + (tb.shown ? '' : ' hide') });
+    tb.w = h('div', { class: 'w t-' + tbTheme() + (cfg.toolbar.layout === 'expanded' ? ' x' : '') + (tb.shown ? '' : ' hide') });
     accentVars(tb.w);
     tb.bar = h('div', { class: 'bar', role: 'toolbar', 'aria-label': 'QualityLock video controls' });
     tb.tl = buildTimeline();
@@ -2671,6 +2732,7 @@
 
   function setToolbar(onOff, quiet) {
     tb.enabled = onOff;
+    if (OWN_PLAYER) { try { G.localStorage.setItem(OWN_TB_KEY, onOff ? '1' : '0'); } catch (e) { /* storage blocked */ } }
     if (onOff) { tb.force = now() + 3500; ptr.at = now(); }
     else closePanel();
     tbUpdate(true);
@@ -2762,7 +2824,7 @@
     if (tb.panelApi) tb.panelApi.update();
   }
 
-  function refreshUi() { if (tb.host) tbUpdate(true); }
+  function refreshUi() { if (tb.host) tbUpdate(true); embUpdate(); }
 
   // Pointer tracking (cheap; the work happens in one animation frame).
   var uiRaf = 0;
@@ -2786,6 +2848,7 @@
   G.setInterval(function () {
     if (!on()) { if (tb.host || idleAttr) tbUpdate(true); return; }
     if (tb.shown || tb.panelId || cfg.toolbar.show === 'always' || now() - ptr.at < idleMs() + 8000) tbUpdate(false);
+    embUpdate();
     // Remember frames for timeline previews while the expanded layout is in use.
     var v = tb.enabled && cfg.toolbar.layout === 'expanded' ? targetVideo() : null;
     if (v) thumbs.sample(v);
@@ -2959,15 +3022,8 @@
       case 'pictureCompare': pictureBypass = !!(p && p.on); applyAll(); return;
       case 'backdropLive': if (p && p.backdrop) setBackdrop(p.backdrop, false, true); return;
       case 'setBackdrop': if (p && p.backdrop && typeof p.backdrop === 'object') setBackdrop(p.backdrop, true); return;
-      case 'panel':
-        // One toolbar panel on its own (the player page's settings menu). The
-        // toolbar goes away again with the panel if it was off.
-        if (!p || !PANELS[p.id]) return;
-        var wasOff = !tb.enabled;
-        if (wasOff) setToolbar(true, true);
-        if (tb.panelId !== p.id) openPanel(p.id);
-        if (wasOff) tb.forPanel = true;
-        return;
+      case 'embedPanel': if (p && PANELS[p.id]) embedPanel(p.id); else closeEmbed(); return;
+      case 'setToolbar': setToolbar(!!(p && p.on), !!(p && p.quiet)); return;
       case 'cycleBackdrop': cycleBackdrop(); return;
       case 'setSpeed': setSpeed(num(p, 'speed', 1), !!(p && p.quiet)); return;
       case 'speedUp': stepSpeed(1); return;
@@ -3023,7 +3079,8 @@
     refreshCfg();
     if (livePicture && (now() - livePictureAt > 2500 || JSON.stringify(livePicture) === JSON.stringify(cfg.picture))) livePicture = null;
     if (liveBackdrop && (now() - liveBackdropAt > 2500 || JSON.stringify(liveBackdrop) === JSON.stringify(cfg.backdrop))) liveBackdrop = null;
-    if (cfg.toolbar.show !== prevShow) tb.enabled = cfg.toolbar.show !== 'manual' && !OWN_PLAYER;
+    if (cfg.toolbar.show !== prevShow && !OWN_PLAYER) tb.enabled = tbDefault();
+    pageTheme();
     if (cfg.display.rememberPerSite && !prevRemember) saveDisp();
     if (!cfg.display.rememberPerSite && prevRemember) { try { G.localStorage.removeItem(DISP_KEY); } catch (e) { /* ignore */ } }
     if (!on()) { winfsOff(); lightsOff(); setIdleCursor(false); }
@@ -3071,5 +3128,6 @@
   };
 
   loadDisp();
+  pageTheme();
   if (cfg.display.rememberPerSite && disp.mode !== 'original') G.setTimeout(applyAll, 500);
 })();

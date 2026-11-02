@@ -1,18 +1,75 @@
-/* QualityLock player page (local.html). Always dark: it's a video player. */
+/* QualityLock player page (local.html). The page is dark: it's a video player.
+   What opens over the picture (menus and their panels, the side panel, toasts,
+   tooltips, the centre buttons, the start card) takes the theme picked for
+   QualityLock's toolbar (popup → Toolbar → Theme) and its accent colours:
+   player.js puts them on <html> (data-theme, --accent, --accent2, --on-accent).
+   The control bar stays white on its dark fade, as it sits on the picture.
+   Glass is the default. */
 :root {
   --bg: #0b0c0f;
-  --card: #191c21;
   --ink: #eef1f4;
   --muted: #9ba5b1;
   --line: #2a2f36;
   --soft: #22262c;
   --hover: rgba(255, 255, 255, 0.06);
-  --accent: #f2a7b5;
-  --accent-ink: #1d1a22;
   --red: #ff7b6b;
-  --glass: rgba(16, 17, 21, 0.94);
   --text: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   color-scheme: dark;
+
+  --accent: #f2a7b5;
+  --accent2: #c9a3e6;
+  --on-accent: #1d1a22;
+  --accent-fg: var(--accent);   /* accent as text */
+  --pop: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .04)), rgba(22, 22, 28, .72);
+  --pop-solid: #24242c;         /* under native lists (select) */
+  --pop-blur: blur(26px) saturate(185%);
+  --pop-fg: #fff;
+  --pop-muted: rgba(255, 255, 255, .72);
+  --pop-line: rgba(255, 255, 255, .16);
+  --pop-hover: rgba(255, 255, 255, .12);
+  --pop-field: rgba(0, 0, 0, .28);
+  --pop-shadow: 0 18px 44px rgba(0, 0, 0, .42), 0 0 0 1px rgba(255, 255, 255, .16), inset 0 1px 0 rgba(255, 255, 255, .22);
+  --pop-scheme: dark;
+  --round: rgba(255, 255, 255, .16);   /* centre buttons */
+  --round-hover: rgba(255, 255, 255, .27);
+  --round-fg: #fff;
+  --round-rim: 0 0 0 1px rgba(255, 255, 255, .2), inset 0 1px 0 rgba(255, 255, 255, .25);
+  --tip: rgba(12, 13, 16, .92);
+  --tip-fg: #fff;
+}
+:root[data-theme="dark"] {
+  --pop: linear-gradient(180deg, rgba(38, 39, 46, .98), rgba(24, 25, 30, .98));
+  --pop-solid: #1c1d22;
+  --pop-blur: blur(10px);
+  --pop-fg: #f2f3f6;
+  --pop-muted: #9ea4b0;
+  --pop-line: rgba(255, 255, 255, .09);
+  --pop-hover: rgba(255, 255, 255, .08);
+  --pop-field: rgba(0, 0, 0, .3);
+  --pop-shadow: 0 18px 44px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .07), inset 0 1px 0 rgba(255, 255, 255, .06);
+  --round: rgba(10, 11, 14, .58);
+  --round-hover: rgba(34, 35, 41, .82);
+  --round-rim: 0 0 0 1px rgba(255, 255, 255, .06);
+}
+:root[data-theme="light"] {
+  --red: #c0392b;
+  --accent-fg: color-mix(in srgb, var(--accent) 52%, #000);
+  --pop: rgba(255, 255, 255, .96);
+  --pop-solid: #fff;
+  --pop-blur: blur(20px) saturate(160%);
+  --pop-fg: #17181c;
+  --pop-muted: #5d6370;
+  --pop-line: rgba(0, 0, 0, .1);
+  --pop-hover: rgba(0, 0, 0, .055);
+  --pop-field: rgba(0, 0, 0, .045);
+  --pop-shadow: 0 16px 40px rgba(0, 0, 0, .3), 0 0 0 1px rgba(0, 0, 0, .06);
+  --pop-scheme: light;
+  --round: rgba(255, 255, 255, .88);
+  --round-hover: #fff;
+  --round-fg: #17181c;
+  --round-rim: 0 4px 16px rgba(0, 0, 0, .25);
+  --tip: rgba(255, 255, 255, .97);
+  --tip-fg: #17181c;
 }
 
 * { box-sizing: border-box; }
@@ -29,7 +86,8 @@ button { font: inherit; color: inherit; }
 
 svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 svg .f { fill: currentColor; stroke: none; }
-svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); text-anchor: middle; }
+/* The skip buttons' step, in the middle of the ring whatever the font. */
+svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); text-anchor: middle; dominant-baseline: central; }
 
 /* ---------- stage: the video box fills the window ----------
    The picture sits inside the box, so the black bars are part of it: player.js
@@ -102,17 +160,18 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: rgba(10, 11, 14, .55);
-  backdrop-filter: blur(10px);
+  color: var(--round-fg);
+  background: var(--round);
+  box-shadow: var(--round-rim);
+  backdrop-filter: var(--pop-blur);
   cursor: pointer;
   pointer-events: auto;
   transition: transform .15s ease, background .15s ease, opacity .15s ease;
 }
-.c:hover { background: rgba(255, 255, 255, .2); transform: scale(1.07); }
+.c:hover { background: var(--round-hover); transform: scale(1.07); }
 .c:active { transform: scale(.96); }
 .c svg { width: 30px; height: 30px; }
-.c.big { width: 86px; height: 86px; background: rgba(10, 11, 14, .62); }
+.c.big { width: 86px; height: 86px; }
 .c.big svg { width: 44px; height: 44px; }
 .stage.waiting .c.big { visibility: hidden; }
 
@@ -144,7 +203,7 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
 .hov { background: rgba(255, 255, 255, .3); opacity: 0; }
 .seek:hover .hov { opacity: 1; }
 .seek.drag .hov { opacity: 0; }
-.played { background: var(--accent); }
+.played { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
 .knob {
   position: absolute;
   top: 50%;
@@ -154,7 +213,7 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   margin: -8px 0 0 -8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(242, 167, 181, .25);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent);
   transform: scale(0);
   transition: transform .12s ease;
   pointer-events: none;
@@ -223,8 +282,9 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   transform: translateX(-50%);
   padding: 6px 9px;
   border-radius: 7px;
-  background: rgba(12, 13, 16, .94);
-  color: #fff;
+  background: var(--tip);
+  color: var(--tip-fg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
   font: 600 12px/1.2 var(--text);
   white-space: nowrap;
   pointer-events: none;
@@ -289,14 +349,15 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   overflow-y: auto;
   padding: 6px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, .09);
-  background: var(--glass);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
+  color: var(--pop-fg);
+  color-scheme: var(--pop-scheme);
+  background: var(--pop);
+  backdrop-filter: var(--pop-blur);
+  box-shadow: var(--pop-shadow);
   pointer-events: auto;
 }
-.menu h3 { margin: 8px 10px 4px; font: 700 11px/1.3 var(--text); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
-.menu hr { border: 0; border-top: 1px solid rgba(255, 255, 255, .08); margin: 6px 4px; }
+.menu h3 { margin: 8px 10px 4px; font: 700 11px/1.3 var(--text); letter-spacing: .07em; text-transform: uppercase; color: var(--pop-muted); }
+.menu hr { border: 0; border-top: 1px solid var(--pop-line); margin: 6px 4px; }
 .item {
   display: flex;
   align-items: center;
@@ -306,32 +367,45 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #eceef1;
+  color: inherit;
   font: 500 14px/1.3 var(--text);
   text-align: left;
   cursor: pointer;
 }
-.item:hover { background: rgba(255, 255, 255, .08); }
+.item:hover { background: var(--pop-hover); }
 .item:disabled { opacity: .45; cursor: default; }
 .item:disabled:hover { background: transparent; }
-.menu .mhint { margin: 2px 10px 6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
-.item.on { color: var(--accent); }
+.menu .mhint { margin: 2px 10px 6px; font-size: 12px; line-height: 1.4; color: var(--pop-muted); }
+.item.on { color: var(--accent-fg); }
 .item .ck { width: 16px; flex: none; text-align: center; }
-.item .n { width: 24px; flex: none; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.item .n { width: 24px; flex: none; color: var(--pop-muted); font-variant-numeric: tabular-nums; text-align: right; }
 .item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.item .d { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.item .d { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pop-muted); font-size: 12px; }
+.item .d:empty { display: none; }
+.item.sub svg { width: 16px; height: 16px; flex: none; margin-right: -2px; color: var(--pop-muted); stroke-width: 2.2; }
+
+/* settings menu: one of QualityLock's panels in place of the list, drawn by
+   player.js into .mpanel; the header leads back */
+.menu.wide { width: min(340px, calc(100% - 36px)); display: flex; flex-direction: column; overflow: hidden; padding: 6px 0 0; }
+.mhead { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px 6px 6px; border-bottom: 1px solid var(--pop-line); }
+.mhead strong { font: 650 14px/1.3 var(--text); }
+.mback { width: 34px; height: 34px; flex: none; border: 0; border-radius: 9px; display: grid; place-items: center; background: transparent; color: inherit; cursor: pointer; }
+.mback:hover { background: var(--pop-hover); }
+.mback:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mback svg { width: 20px; height: 20px; stroke-width: 2.2; }
+.mpanel { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 14px; overscroll-behavior: contain; scrollbar-width: thin; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 8px 8px; }
 .chip {
   padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, .14);
+  border: 1px solid var(--pop-line);
   border-radius: 999px;
   background: transparent;
-  color: #eceef1;
+  color: inherit;
   font: 600 12.5px/1.2 var(--text);
   cursor: pointer;
 }
-.chip:hover { background: rgba(255, 255, 255, .08); }
-.chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); }
+.chip:hover { background: var(--pop-hover); }
+.chip.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); border-color: transparent; color: var(--on-accent); }
 
 /* feedback: centre flash, buffering spinner, toast */
 .flash {
@@ -384,22 +458,23 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   max-width: calc(100% - 44px);
   padding: 10px 12px 10px 14px;
   border-radius: 12px;
-  background: var(--glass);
-  color: #eceef1;
+  background: var(--pop);
+  backdrop-filter: var(--pop-blur);
+  color: var(--pop-fg);
   font: 500 13.5px/1.4 var(--text);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  box-shadow: var(--pop-shadow);
 }
 .toast button {
   flex: none;
   padding: 6px 10px;
   border: 0;
   border-radius: 8px;
-  background: rgba(255, 255, 255, .1);
-  color: var(--accent);
+  background: var(--pop-hover);
+  color: var(--accent-fg);
   font-weight: 650;
   cursor: pointer;
 }
-.toast button:hover { background: rgba(255, 255, 255, .16); }
+.toast button:hover { background: var(--pop-line); }
 
 /* ---------- subtitles (local-subs.js) ---------- */
 .subs {
@@ -441,26 +516,26 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
 
 /* delay row (CC menu and sync panel) */
 .delay { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px; }
-.delay .dv { flex: 1; min-width: 0; text-align: center; font: 600 12.5px/1.3 var(--text); color: #eceef1; font-variant-numeric: tabular-nums; }
+.delay .dv { flex: 1; min-width: 0; text-align: center; font: 600 12.5px/1.3 var(--text); color: inherit; font-variant-numeric: tabular-nums; }
 .db {
   padding: 6px 9px;
-  border: 1px solid rgba(255, 255, 255, .14);
+  border: 1px solid var(--pop-line);
   border-radius: 8px;
   background: transparent;
-  color: #eceef1;
+  color: inherit;
   font: 650 12px/1.2 var(--text);
   cursor: pointer;
 }
-.db:hover { background: rgba(255, 255, 255, .08); }
+.db:hover { background: var(--pop-hover); }
 .selrow { padding: 2px 8px 8px; }
 .sel {
   width: 100%;
   height: 34px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, .14);
+  border: 1px solid var(--pop-line);
   border-radius: 8px;
-  background: #15171b;
-  color: #eceef1;
+  background: var(--pop-solid);
+  color: var(--pop-fg);
   font: 500 13px/1 var(--text);
 }
 
@@ -474,11 +549,17 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   width: var(--side-w);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid rgba(255, 255, 255, .08);
-  background: var(--glass);
-  backdrop-filter: blur(16px);
+  border-left: 1px solid var(--pop-line);
+  color: var(--pop-fg);
+  color-scheme: var(--pop-scheme);
+  background: var(--pop);
+  backdrop-filter: var(--pop-blur);
   box-shadow: -12px 0 40px rgba(0, 0, 0, .45);
 }
+.side .b { color: inherit; }
+.side .b:hover { background: var(--pop-hover); }
+.side .btn:not(.primary) { border-color: var(--pop-line); color: inherit; }
+.side .btn:not(.primary):hover { background: var(--pop-hover); }
 .stage { --side-w: min(400px, 92vw); }
 .stage.idle .side, .stage.idle .side * { cursor: auto !important; }
 @media (min-width: 760px) {
@@ -491,7 +572,7 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
 .sh strong { font-size: 16px; font-weight: 650; }
 .sh .sx { width: 36px; height: 36px; font-size: 15px; }
 .sbody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; }
-.side .hint { margin: 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.side .hint { margin: 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--pop-muted); }
 .side .hint.warn { color: var(--red); }
 .side .hint:empty { display: none; }
 .side .delay { padding: 0; }
@@ -499,10 +580,10 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   width: 100%;
   height: 38px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, .14);
+  border: 1px solid var(--pop-line);
   border-radius: 10px;
-  background: rgba(0, 0, 0, .35);
-  color: #fff;
+  background: var(--pop-field);
+  color: inherit;
   font: 500 14px/1 var(--text);
   outline: none;
 }
@@ -514,14 +595,14 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   gap: 10px;
   padding: 8px 8px;
   border-radius: 9px;
-  color: rgba(236, 238, 241, .62);
+  color: color-mix(in srgb, var(--pop-fg) 62%, transparent);
   font: 500 14.5px/1.4 var(--text);
   cursor: pointer;
 }
-.srow:hover { background: rgba(255, 255, 255, .07); color: #fff; }
-.srow.on { color: #fff; background: rgba(242, 167, 181, .14); }
-.srow.on .st { color: var(--accent); }
-.st { flex: none; width: 54px; color: var(--muted); font: 600 12px/1.4 var(--text); font-variant-numeric: tabular-nums; }
+.srow:hover { background: var(--pop-hover); color: var(--pop-fg); }
+.srow.on { color: var(--pop-fg); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.srow.on .st { color: var(--accent-fg); }
+.st { flex: none; width: 54px; color: var(--pop-muted); font: 600 12px/1.4 var(--text); font-variant-numeric: tabular-nums; }
 .stx { flex: 1; min-width: 0; }
 .sj {
   flex: none;
@@ -531,13 +612,13 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--muted);
+  color: var(--pop-muted);
   font-size: 11px;
   cursor: pointer;
   opacity: 0;
 }
 .srow:hover .sj { opacity: 1; }
-.sj:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.sj:hover { background: var(--pop-hover); color: var(--pop-fg); }
 .osf { display: flex; flex-direction: column; gap: 8px; }
 .osrow { display: flex; gap: 8px; }
 .osrow .sel, .osrow .find { flex: 1; min-width: 0; height: 38px; }
@@ -551,22 +632,23 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #eceef1;
+  color: inherit;
   text-align: left;
   cursor: pointer;
 }
-.osr:hover { background: rgba(255, 255, 255, .07); }
-.osr.on { background: rgba(242, 167, 181, .14); }
+.osr:hover { background: var(--pop-hover); }
+.osr.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .osr:disabled { opacity: .6; cursor: progress; }
 .osr .ot { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font: 600 13.5px/1.35 var(--text); overflow-wrap: anywhere; }
-.osr .om { font: 500 12px/1.4 var(--text); color: var(--muted); }
+.osr .om { font: 500 12px/1.4 var(--text); color: var(--pop-muted); }
 .osr .ok { align-self: flex-start; padding: 1px 7px; border-radius: 999px; background: rgba(76, 195, 138, .18); color: #7fe0ac; font: 650 11px/1.5 var(--text); }
+:root[data-theme="light"] .osr .ok { color: #1d7a4b; }
 .osr.low { opacity: .55; }
 .osr.low:hover { opacity: 1; }
-.osr + .osr { box-shadow: 0 -1px 0 rgba(255, 255, 255, .05); }
+.osr + .osr { box-shadow: 0 -1px 0 var(--pop-line); }
 .osr:hover, .osr.on, .osr:hover + .osr, .osr.on + .osr { box-shadow: none; }
 .oslist .more { width: 100%; height: 36px; margin: 6px 0 2px; }
-.side .foot { margin: 0 4px; font-size: 12px; color: var(--muted); }
+.side .foot { margin: 0 4px; font-size: 12px; color: var(--pop-muted); }
 .side .foot:empty { display: none; }
 
 /* ---------- file picker ---------- */
@@ -586,13 +668,19 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   align-items: center;
   gap: 12px;
   padding: 28px 26px 22px;
-  border: 1px solid var(--line);
   border-radius: 16px;
-  background: var(--card);
+  color: var(--pop-fg);
+  color-scheme: var(--pop-scheme);
+  background: var(--pop);
+  backdrop-filter: var(--pop-blur);
+  box-shadow: var(--pop-shadow);
   text-align: center;
 }
 .card h1 { margin: 0; font-size: 19px; font-weight: 700; }
-.card p { margin: 0; color: var(--muted); }
+.card p { margin: 0; color: var(--pop-muted); }
+.card .btn:not(.primary) { border-color: var(--pop-line); color: inherit; }
+.card .btn:not(.primary):hover { background: var(--pop-hover); }
+.card kbd { border-color: var(--pop-line); background: var(--pop-hover); color: inherit; }
 .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .btn {
   height: 38px;
@@ -605,7 +693,7 @@ svg text.step { fill: currentColor; stroke: none; font: 700 7px/1 var(--text); t
   transition: background .12s, filter .12s;
 }
 .btn:hover { background: var(--hover); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border-color: transparent; color: var(--on-accent); }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note { font-size: 12.5px; }

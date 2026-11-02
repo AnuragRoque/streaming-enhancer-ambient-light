@@ -718,6 +718,7 @@
   function openMenu(kind, build) {
     if (menuFor === kind) { closeMenu(); return; }
     menu.textContent = '';
+    menu.classList.remove('wide');
     build(menu);
     menu.hidden = false;
     menuFor = kind;
@@ -729,8 +730,10 @@
   }
   function closeMenu() {
     if (!menuOpen) return;
+    if (menu.querySelector('[data-qlock-panel]')) act('embedPanel', null);
     menu.hidden = true;
     menu.textContent = '';
+    menu.classList.remove('wide');
     menuFor = '';
     menuOpen = false;
     stage.classList.remove('menu-open');
@@ -761,8 +764,45 @@
 
   var SIZES = [['original', 'Fit'], ['fill', 'Fill'], ['stretch', 'Stretch'], [16 / 9, '16:9'], [64 / 27, '21:9'], [4 / 3, '4:3']];
   var BACKDROPS = [['off', 'Off'], ['ambient', 'Ambient'], ['blur', 'Blur'], ['rgb', 'RGB light']];
+  // QualityLock's own panels (player.js), shown in this menu in place of its
+  // list, with a way back, rather than on the floating toolbar.
+  var PANELS = { display: 'Zoom & aspect ratio', picture: 'Picture', backdrop: 'Black bar backdrop' };
+  function svgIcon(d) {
+    var NS = 'http://www.w3.org/2000/svg', s = document.createElementNS(NS, 'svg'), p = document.createElementNS(NS, 'path');
+    s.setAttribute('viewBox', '0 0 24 24');
+    p.setAttribute('d', d);
+    s.appendChild(p);
+    return s;
+  }
+  function panelItem(id, label, detail) {
+    var b = item(label, false, function () { showPanel(id); }, el('span', 'd', detail || ''));
+    b.classList.add('sub');
+    b.appendChild(svgIcon('M9.5 6.5l5.5 5.5-5.5 5.5'));
+    return b;
+  }
+  function showPanel(id) {
+    menu.textContent = '';
+    menu.classList.add('wide');
+    var head = el('div', 'mhead');
+    var back = el('button', 'mback');
+    back.type = 'button';
+    back.setAttribute('aria-label', 'Back');
+    back.appendChild(svgIcon('M14.5 6.5L9 12l5.5 5.5'));
+    back.addEventListener('click', function () {
+      act('embedPanel', null);
+      qlStatus(function (st) { if (menuFor !== 'settings') return; menu.textContent = ''; menu.classList.remove('wide'); settingsMenu(menu, st); });
+    });
+    head.appendChild(back);
+    head.appendChild(el('strong', '', PANELS[id]));
+    var host = el('div', 'mpanel');
+    host.setAttribute('data-qlock-panel', id);
+    menu.appendChild(head);
+    menu.appendChild(host);
+    menu.scrollTop = 0;
+    act('embedPanel', { id: id });
+  }
   function settingsMenu(m, st) {
-    var d = st && st.display, b = st && st.backdrop;
+    var d = st && st.display, b = st && st.backdrop, tbOn = !!(st && st.toolbar && st.toolbar.enabled);
     m.appendChild(el('h3', '', 'Picture size'));
     m.appendChild(chips(SIZES, function (o) {
       if (!d) return o[0] === 'original';
@@ -776,11 +816,14 @@
       act('setBackdrop', { backdrop: { mode: o[0] } });
     }));
     m.appendChild(el('hr'));
-    m.appendChild(item('Zoom, rotate, bars inside the film…', false, function () { closeMenu(); act('panel', { id: 'display' }); }));
-    m.appendChild(item('Picture: brightness, colour, night…', false, function () { closeMenu(); act('panel', { id: 'picture' }); }));
-    m.appendChild(item('Backdrop intensity and softness…', false, function () { closeMenu(); act('panel', { id: 'backdrop' }); }));
+    m.appendChild(panelItem('display', 'Zoom, rotate, bars inside the film', d && d.label !== 'Original' ? d.label : ''));
+    m.appendChild(panelItem('picture', 'Picture: brightness, colour, night'));
+    m.appendChild(panelItem('backdrop', 'Backdrop: intensity, softness, RGB'));
+    m.appendChild(el('hr'));
     m.appendChild(item('Save this frame (PNG)', false, function () { closeMenu(); act('snapshot'); }));
     m.appendChild(item('Stats for nerds', false, function () { closeMenu(); act('toggleStats'); }));
+    // The same controls on QualityLock's floating toolbar, as on sites. Remembered.
+    m.appendChild(item('Floating toolbar', tbOn, function () { closeMenu(); act('setToolbar', { on: !tbOn }); }));
     m.appendChild(el('hr'));
     m.appendChild(item('Open videos…', false, function () { closeMenu(); fileInput.click(); }));
     m.appendChild(item('Open a folder…', false, function () { closeMenu(); openFolder(); }));
@@ -828,7 +871,10 @@
   $('mute').addEventListener('click', toggleMute);
   $('fsBtn').addEventListener('click', toggleFs);
   $('pipBtn').addEventListener('click', togglePip);
-  $('qlBtn').addEventListener('click', function () { closeMenu(); act('toggleToolbar'); });
+  $('qlBtn').addEventListener('click', function () {
+    closeMenu();
+    qlStatus(function (st) { act('setToolbar', { on: !(st && st.toolbar && st.toolbar.enabled) }); });
+  });
   speedBtn.addEventListener('click', function () { openMenu('speed', speedMenu); });
   $('ccBtn').addEventListener('click', function () { openMenu('subs', function (m) { audioMenu(m); subs.menu(m); }); });
   $('listBtn').addEventListener('click', function () { openMenu('list', listMenu); });
